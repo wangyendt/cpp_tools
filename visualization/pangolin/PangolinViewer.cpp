@@ -1,6 +1,39 @@
 #include <unistd.h>
-
 #include "PangolinViewer.h"
+
+struct PangolinViewer::RuntimeInfo {
+    pangolin::GlTexture tex_track;
+    pangolin::GlTexture tex_plane_detection;
+    pangolin::View* track_result;
+    pangolin::View* plane_detection_result;
+    pangolin::Plotter* plotter_extrin_t;
+    pangolin::Plotter* plotter_dt;
+    pangolin::Plotter* plotter_vel;
+    pangolin::Plotter* plotter_bg;
+    pangolin::Plotter* plotter_ba;
+    pangolin::View* Visualization3D_display;
+	pangolin::OpenGlRenderState* Visualization3D_camera;
+
+
+    pangolin::Var<bool>* pb_follow_camera { new pangolin::Var<bool>("ui.Follow Camera", false, true) };
+    pangolin::Var<bool>* pb_camera_view { new pangolin::Var<bool>("ui.Camera View", false, false) };
+
+    pangolin::Var<bool>* pb_show_traj { new pangolin::Var<bool>("ui.Show Trajectory", true, true) };
+    pangolin::Var<bool>* pb_show_points { new pangolin::Var<bool>("ui.Show 3D Points", true, true) };
+    pangolin::Var<bool>* pb_show_history_points { new pangolin::Var<bool>("ui.Show History 3D", true, true) };
+    pangolin::Var<bool>* pb_show_history_plane_tri_points { new pangolin::Var<bool>("ui.Show Plane tri 3D", true, true) };
+    pangolin::Var<bool>* pb_show_history_plane_vio_stable_points { new pangolin::Var<bool>("ui.Show Plane vio 3D", true, true) };
+    pangolin::Var<bool>* pb_show_plane { new pangolin::Var<bool>("ui.Show Plane", true, true) };
+
+    pangolin::Var<bool>* pb_show_est_bg { new pangolin::Var<bool>("ui.show_est_bg", true, true) };
+    pangolin::Var<bool>* pb_show_est_ba { new pangolin::Var<bool>("ui.show_est_ba", true, true) };
+    pangolin::Var<bool>* pb_show_est_timeoffset { new pangolin::Var<bool>("ui.show_est_dt", false, true) };
+    pangolin::Var<bool>* pb_show_est_vel { new pangolin::Var<bool>("ui.show_est_vel",false, true) };
+    pangolin::Var<bool>* pb_show_est_extrin_trans { new pangolin::Var<bool>("ui.show_est_ex_t", false, true) };
+
+    pangolin::Var<bool>* pb_step_by_step { new pangolin::Var<bool>("ui.Step by Step", false, false) };
+    pangolin::Var<bool>* pb_start_algorithm { new pangolin::Var<bool>("ui.Start Button", false, false) };
+};
 
 PangolinViewer::PangolinViewer(int w, int h, bool start_run_thread) 
 {
@@ -30,6 +63,8 @@ PangolinViewer::PangolinViewer(int w, int h, bool start_run_thread)
     vio_bg_data_log.Clear();
     vio_ba_data_log.Clear();
 
+    mRuntimeInfo = std::make_shared<RuntimeInfo>();
+
     track_img_changed = false;
     //track_img = cv::Mat::zeros(track_img_width, track_img_height, CV_8UC3);
 
@@ -39,6 +74,8 @@ PangolinViewer::PangolinViewer(int w, int h, bool start_run_thread)
     if(start_run_thread) {
         run_thread = std::thread(&PangolinViewer::run, this);
     }
+
+    // extern_init();
 }
 
 PangolinViewer::~PangolinViewer()
@@ -94,6 +131,15 @@ void PangolinViewer::reset_internal()
 
 void PangolinViewer::run()
 {
+    extern_init();
+    while (extern_should_quit())
+    {
+        extern_run_single_step();
+    }
+    printf("Finished pangolin run\n");
+}
+
+void PangolinViewer::extern_init() {
 	printf("START PANGOLIN FOR VIEWING!\n");
     pangolin::CreateWindowAndBind("Main", 4 * w, 3 * h);
 	const int UI_WIDTH = 180;
@@ -101,298 +147,277 @@ void PangolinViewer::run()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	// 3D visualization
-	pangolin::OpenGlRenderState Visualization3D_camera(
+    mRuntimeInfo->Visualization3D_camera = new pangolin::OpenGlRenderState(
 		pangolin::ProjectionMatrix(w, h, 500, 500, w/2, h/2, 0.1, 1000),
 		pangolin::ModelViewLookAt(0.0, -0.7, -1.8, 0, 0, 0, 0.0, -1.0, 0.0)
 		);
 
-	pangolin::View& Visualization3D_display = pangolin::CreateDisplay()
+	mRuntimeInfo->Visualization3D_display = &pangolin::CreateDisplay()
 		.SetBounds(0.0, 0.5, 0.3, 1.0, -w/(float)h)
-		.SetHandler(new pangolin::Handler3D(Visualization3D_camera));
+		.SetHandler(new pangolin::Handler3D(*mRuntimeInfo->Visualization3D_camera));
 
-	pangolin::View& track_result = pangolin::Display("img_track_video")
+	mRuntimeInfo->track_result = &pangolin::Display("img_track_video")
 	    .SetAspect(track_img_width / (float)track_img_height);
-    pangolin::GlTexture tex_track(track_img_width, track_img_height, GL_RGB, false, 0, GL_RGB, GL_UNSIGNED_BYTE);
+    mRuntimeInfo->tex_track.Reinitialise(track_img_width, track_img_height, GL_RGB, false, 0, GL_RGB, GL_UNSIGNED_BYTE);
 
     pangolin::CreateDisplay()
 		  .SetBounds(0.0, 0.3, pangolin::Attach::Pix(UI_WIDTH), 0.3)
 		  .SetLayout(pangolin::LayoutEqual)
-		  .AddDisplay(track_result);
+		  .AddDisplay(*mRuntimeInfo->track_result);
 
-    pangolin::View& plane_detection_result = pangolin::Display("img_plane_detection_video")
+    mRuntimeInfo->plane_detection_result = &pangolin::Display("img_plane_detection_video")
 	    .SetAspect(track_img_width / (float)track_img_height);
-    pangolin::GlTexture tex_plane_detection(track_img_width, track_img_height, GL_RGB, false, 0, GL_RGB, GL_UNSIGNED_BYTE);
+    mRuntimeInfo->tex_plane_detection.Reinitialise(track_img_width, track_img_height, GL_RGB, false, 0, GL_RGB, GL_UNSIGNED_BYTE);
 
     pangolin::CreateDisplay()
 		  .SetBounds(0.3, 0.6, pangolin::Attach::Pix(UI_WIDTH), 0.3)
 		  .SetLayout(pangolin::LayoutEqual)
-		  .AddDisplay(plane_detection_result);
+		  .AddDisplay(*mRuntimeInfo->plane_detection_result);
 
     // for dt plot 
     pangolin::View& plot_dt_display = pangolin::CreateDisplay().SetBounds(0.95, 1.0, 0.4, 1.0);
-    pangolin::Plotter* plotter_dt = new pangolin::Plotter(&vio_dt_data_log, 0.0, 300, -0.1, 0.1, 0.01f, 0.01f);
-    plotter_dt->ClearSeries();
-    plotter_dt->ClearMarkers();
-    plot_dt_display.AddDisplay(*plotter_dt);
+    mRuntimeInfo->plotter_dt = new pangolin::Plotter(&vio_dt_data_log, 0.0, 300, -0.1, 0.1, 0.01f, 0.01f);
+    mRuntimeInfo->plotter_dt->ClearSeries();
+    mRuntimeInfo->plotter_dt->ClearMarkers();
+    plot_dt_display.AddDisplay(*mRuntimeInfo->plotter_dt);
 
     // for extrinsic translation plot 
     pangolin::View& plot_extrin_t_display = pangolin::CreateDisplay().SetBounds(0.9, 0.95, 0.4, 1.0);
-    pangolin::Plotter* plotter_extrin_t = new pangolin::Plotter(&vio_extrin_t_data_log, 0.0, 300, -0.01, 0.01, 0.01f, 0.01f);
-    plotter_extrin_t->ClearSeries();
-    plotter_extrin_t->ClearMarkers();
-    plot_extrin_t_display.AddDisplay(*plotter_extrin_t);
+    mRuntimeInfo->plotter_extrin_t = new pangolin::Plotter(&vio_extrin_t_data_log, 0.0, 300, -0.01, 0.01, 0.01f, 0.01f);
+    mRuntimeInfo->plotter_extrin_t->ClearSeries();
+    mRuntimeInfo->plotter_extrin_t->ClearMarkers();
+    plot_extrin_t_display.AddDisplay(*mRuntimeInfo->plotter_extrin_t);
 
     // for velocity 
     pangolin::View& plot_vel_display = pangolin::CreateDisplay().SetBounds(0.85, 0.9, 0.4, 1.0);
-    pangolin::Plotter* plotter_vel = new pangolin::Plotter(&vio_vel_data_log, 0.0, 300, -2, 2, 0.01f, 0.01f);
-    plotter_vel->ClearSeries();
-    plotter_vel->ClearMarkers();
-    plot_vel_display.AddDisplay(*plotter_vel);
+    mRuntimeInfo->plotter_vel = new pangolin::Plotter(&vio_vel_data_log, 0.0, 300, -2, 2, 0.01f, 0.01f);
+    mRuntimeInfo->plotter_vel->ClearSeries();
+    mRuntimeInfo->plotter_vel->ClearMarkers();
+    plot_vel_display.AddDisplay(*mRuntimeInfo->plotter_vel);
 
     // for bg 
     pangolin::View& plot_bg_display = pangolin::CreateDisplay().SetBounds(0.80, 0.85, 0.4, 1.0);
-    pangolin::Plotter* plotter_bg = new pangolin::Plotter(&vio_bg_data_log, 0.0, 300, -0.05, 0.05, 0.01f, 0.01f);
-    plot_bg_display.AddDisplay(*plotter_bg);
+    mRuntimeInfo->plotter_bg = new pangolin::Plotter(&vio_bg_data_log, 0.0, 300, -0.05, 0.05, 0.01f, 0.01f);
+    plot_bg_display.AddDisplay(*mRuntimeInfo->plotter_bg);
 
     // for ba 
     pangolin::View& plot_ba_display = pangolin::CreateDisplay().SetBounds(0.75, 0.80, 0.4, 1.0);
-    pangolin::Plotter* plotter_ba = new pangolin::Plotter(&vio_bg_data_log, 0.0, 300, -0.1, 0.1, 0.01f, 0.01f);
-    plot_ba_display.AddDisplay(*plotter_ba);
+    mRuntimeInfo->plotter_ba = new pangolin::Plotter(&vio_bg_data_log, 0.0, 300, -0.1, 0.1, 0.01f, 0.01f);
+    plot_ba_display.AddDisplay(*mRuntimeInfo->plotter_ba);
 
     pangolin::CreatePanel("ui").SetBounds(0.0, 1.0, 0.0, pangolin::Attach::Pix(UI_WIDTH));
-    pangolin::Var<bool> pb_follow_camera("ui.Follow Camera", false, true);
-    pangolin::Var<bool> pb_camera_view("ui.Camera View", false, false);
+}
 
-    pangolin::Var<bool> pb_show_traj("ui.Show Trajectory", true, true);
-    pangolin::Var<bool> pb_show_points("ui.Show 3D Points", true, true);
-    pangolin::Var<bool> pb_show_history_points("ui.Show History 3D", true, true);
-    pangolin::Var<bool> pb_show_history_plane_tri_points("ui.Show Plane tri 3D", true, true);
-    pangolin::Var<bool> pb_show_history_plane_vio_stable_points("ui.Show Plane vio 3D", true, true);
-    pangolin::Var<bool> pb_show_plane("ui.Show Plane", true, true);
+void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
+    // Clear entire screen
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    pangolin::Var<bool> pb_show_est_bg("ui.show_est_bg", true, true);
-    pangolin::Var<bool> pb_show_est_ba("ui.show_est_ba", true, true);
-    pangolin::Var<bool> pb_show_est_timeoffset("ui.show_est_dt", false, true);
-    pangolin::Var<bool> pb_show_est_vel("ui.show_est_vel",false, true);
-    pangolin::Var<bool> pb_show_est_extrin_trans("ui.show_est_ex_t", false, true);
+    std::unique_lock<std::mutex> lk3d(mutex_3D_show);
 
-    pangolin::Var<bool> pb_step_by_step("ui.Step by Step", false, false);
-    pangolin::Var<bool> pb_start_algorithm("ui.Start Button", false, false);
-
-    while( !pangolin::ShouldQuit() && running )
-	{
-		// Clear entire screen
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        std::unique_lock<std::mutex> lk3d(mutex_3D_show);
-
-        if(pangolin::Pushed(pb_step_by_step)) {
-            notify_algorithm();
-            set_algorithm_wait_flag(true);
-        }
-
-        if(pangolin::Pushed(pb_start_algorithm)) {
-            notify_algorithm();
-            set_algorithm_wait_flag(false);
-        }
-
-        Eigen::Matrix4f Twc = Eigen::Matrix4f::Identity();
-        Twc.block<3, 3>(0, 0) = cur_r_wc.toRotationMatrix();
-        Twc.block<3, 1>(0, 3) = cur_t_wc;
-
-        pangolin::OpenGlMatrix TwcGL;
-        for (int i = 0; i < 4; ++i) {
-            for (int j = 0; j < 4; ++j) {
-                TwcGL.m[i*4+j] = Twc(j, i);
-            }
-        }
-        pangolin::OpenGlMatrix OwGL;
-        OwGL.SetIdentity(); // Initialize to identity matrix
-        OwGL.m[12] = cur_t_wc.x(); // px
-        OwGL.m[13] = cur_t_wc.y(); // py
-        OwGL.m[14] = cur_t_wc.z(); // pz
-
-        if (pb_follow_camera && b_follow_camera) {
-            if (b_camera_view) {
-                Visualization3D_camera.Follow(TwcGL);
-            } else {
-                Visualization3D_camera.Follow(OwGL);
-            }
-        } else if (pb_follow_camera && !b_follow_camera) {
-            if (b_camera_view) {
-                std::cout << 3 << std::endl;
-                Visualization3D_camera.SetProjectionMatrix(
-                    pangolin::ProjectionMatrix(w, h, 500, 500, w/2, h/2, 0.1, 1000)
-                );
-                Visualization3D_camera.SetModelViewMatrix(
-                    pangolin::ModelViewLookAt(0, -0.7, -1.8, 0, 0, 0, 0.0, -1.0, 0.0)
-                );
-                Visualization3D_camera.Follow(TwcGL);
-            } else {
-                std::cout << 4 << std::endl;
-                Visualization3D_camera.SetProjectionMatrix(
-                    pangolin::ProjectionMatrix(w, h, 3000, 3000, w/2, h/2, 0.1, 1000)
-                );
-                Visualization3D_camera.SetModelViewMatrix(
-                    pangolin::ModelViewLookAt(0, 0.01, 10, 0, 0, 0, 0.0, 0.0, 1.0)
-                );
-                Visualization3D_camera.Follow(OwGL);
-            }
-            b_follow_camera = true;
-        } else if (!pb_follow_camera && b_follow_camera) {
-            std::cout << 5 << std::endl;
-            b_follow_camera = false;
-        }
-        if (pb_camera_view) {
-            std::cout << 6 << std::endl;
-            pb_camera_view = false;
-            b_camera_view = true;
-            Visualization3D_camera.SetProjectionMatrix(
-                pangolin::ProjectionMatrix(w, h, 500,500, w/2, h/2, 0.1, 10000)
-            );
-            Visualization3D_camera.SetModelViewMatrix(
-                pangolin::ModelViewLookAt(0,-0.7,-1.8, 0,0,0, 0.0, -1.0, 0.0)
-            );
-            Visualization3D_camera.Follow(TwcGL);
-        }
-        // follow_camera(cur_t_wc, cur_r_wc);
-
-
-        Visualization3D_display.Activate(Visualization3D_camera);
-        glClearColor(1.0f,1.0f,1.0f,1.0f);
-
-        if(b_show_trajectory) {
-            draw_trajectory(vio_traj, Eigen::Vector3f(0.0f, 1.0f, 0.0f));
-            draw_trajectory_gt(traj_gt, Eigen::Vector3f(1.0f, 0.0f, 0.0f));
-            draw_current_camera(cur_t_wc, cur_r_wc);
-            draw_current_camera(cur_t_wc_gt, cur_r_wc_gt);
-        }
-        if(b_show_3D_points) {
-            draw_3D_points(cur_slam_pts, Eigen::Vector3f(1.0f, 0.0f, 0.0f), 8);
-            draw_3D_points(cur_msckf_pts, Eigen::Vector3f(0.0f, 0.0f, 1.0f), 8);
-        }
-        if(b_show_history_points) {
-            draw_history_3D_points(Eigen::Vector3f(0.5f, 0.5f, 0.5f), 4);
-        }
-        if(b_show_plane_tri_points) {
-            draw_plane_history_tri_points(Eigen::Vector3f(1.0f, 0.5f, 0.0f), 4);
-        }
-        if(b_show_plane_vio_stable_points) {
-            draw_plane_history_vio_stable_points(Eigen::Vector3f(0.0f, 0.0f, 1.0f), 4);
-        }
-        if(b_show_plane) {
-            draw_history_plane_horizontal();
-            draw_history_plane_vertical();
-        }
-
-        lk3d.unlock();
-
-        mutex_img.lock();
-        if(track_img_changed) tex_track.Upload(track_img.data, GL_BGR, GL_UNSIGNED_BYTE);
-        mutex_img.unlock();
-
-        {   
-            track_result.Activate();
-			glColor4f(1.0f,1.0f,1.0f,1.0f);
-			tex_track.RenderToViewportFlipY();
-            track_img_changed = false;
-        }
-
-        mutex_plane_img.lock();
-        if(plane_detection_img_changed) tex_plane_detection.Upload(plane_detection_img.data, GL_BGR, GL_UNSIGNED_BYTE);
-        mutex_plane_img.unlock();
-
-        {   
-            plane_detection_result.Activate();
-			glColor4f(1.0f,1.0f,1.0f,1.0f);
-			tex_plane_detection.RenderToViewportFlipY();
-            plane_detection_img_changed = false;
-        }
-        
-        {
-            this->b_follow_camera = pb_follow_camera.Get();
-            this->b_show_3D_points = pb_show_points.Get();
-            this->b_show_trajectory = pb_show_traj.Get();
-            this->b_show_history_points = pb_show_history_points.Get();
-            this->b_show_plane_tri_points = pb_show_history_plane_tri_points.Get();
-            this->b_show_plane_vio_stable_points = pb_show_history_plane_vio_stable_points.Get();
-            this->b_show_plane = pb_show_plane.Get();
-
-            this->b_show_est_bg = pb_show_est_bg.Get();
-            this->b_show_est_ba = pb_show_est_ba.Get();
-            this->b_show_est_dt = pb_show_est_timeoffset.Get();
-            this->b_show_est_vel = pb_show_est_vel.Get();
-            this->b_show_est_extrin_t = pb_show_est_extrin_trans.Get();
-        }
-
-        if(b_show_est_dt) {
-            plotter_dt->ClearSeries();
-            plotter_dt->ClearMarkers();
-            plotter_dt->AddSeries("$0", "$1", pangolin::DrawingModeLine, pangolin::Colour::Red(), "timeoffset", &vio_dt_data_log);
-            plotter_dt->AddMarker(pangolin::Marker::Vertical, cur_t, pangolin::Marker::Equal, pangolin::Colour::White());
-        }
-
-        if(b_show_est_extrin_t) {
-            plotter_extrin_t->ClearSeries();
-            plotter_extrin_t->ClearMarkers();
-            plotter_extrin_t->AddSeries("$0", "$1", pangolin::DrawingModeLine, pangolin::Colour::Red(), "extrin x", &vio_extrin_t_data_log);
-            plotter_extrin_t->AddSeries("$0", "$2", pangolin::DrawingModeLine, pangolin::Colour::Green(), "extrin y", &vio_extrin_t_data_log);
-            plotter_extrin_t->AddSeries("$0", "$3", pangolin::DrawingModeLine, pangolin::Colour::Blue(), "extrin z", &vio_extrin_t_data_log);
-            plotter_extrin_t->AddMarker(pangolin::Marker::Vertical, cur_t, pangolin::Marker::Equal, pangolin::Colour::White());
-        }
-
-        if(b_show_est_vel) {
-            plotter_vel->ClearSeries();
-            plotter_vel->ClearMarkers();
-            plotter_vel->AddSeries("$0", "$1", pangolin::DrawingModeLine, pangolin::Colour::Red(), "vel x", &vio_vel_data_log);
-            plotter_vel->AddSeries("$0", "$2", pangolin::DrawingModeLine, pangolin::Colour::Green(), "vel y", &vio_vel_data_log);
-            plotter_vel->AddSeries("$0", "$3", pangolin::DrawingModeLine, pangolin::Colour::Blue(), "vel z", &vio_vel_data_log);
-            plotter_vel->AddMarker(pangolin::Marker::Vertical, cur_t, pangolin::Marker::Equal, pangolin::Colour::White());
-        }
-
-        if(b_show_est_bg) {
-            plotter_bg->ClearSeries();
-            plotter_bg->ClearMarkers();
-            plotter_bg->AddSeries("$0", "$1", pangolin::DrawingModeLine, pangolin::Colour::Red(), "gyro bias x", &vio_bg_data_log);
-            plotter_bg->AddSeries("$0", "$2", pangolin::DrawingModeLine, pangolin::Colour::Green(), "gyro bias y", &vio_bg_data_log);
-            plotter_bg->AddSeries("$0", "$3", pangolin::DrawingModeLine, pangolin::Colour::Blue(), "gyro bias z", &vio_bg_data_log);
-            plotter_bg->AddMarker(pangolin::Marker::Vertical, cur_t, pangolin::Marker::Equal, pangolin::Colour::White());
-        }
-
-        if(b_show_est_ba) {
-            plotter_ba->ClearSeries();
-            plotter_ba->ClearMarkers();
-            plotter_ba->AddSeries("$0", "$1", pangolin::DrawingModeLine, pangolin::Colour::Red(), "accel bias x", &vio_ba_data_log);
-            plotter_ba->AddSeries("$0", "$2", pangolin::DrawingModeLine, pangolin::Colour::Green(), "accel bias y", &vio_ba_data_log);
-            plotter_ba->AddSeries("$0", "$3", pangolin::DrawingModeLine, pangolin::Colour::Blue(), "accel bias z", &vio_ba_data_log);
-            plotter_ba->AddMarker(pangolin::Marker::Vertical, cur_t, pangolin::Marker::Equal, pangolin::Colour::White());
-        }
-
-        //usleep(5000);
-        // control step and step debug, stupid implementation 
-        // should improved with keyboard response thread
-        // cv::Mat response_img = cv::Mat::zeros(100, 100, CV_8UC1);
-        // cv::imshow("keyboard response", response_img);
-        // if(plane_detection_img.empty()) {
-        //     plane_detection_img = cv::Mat::zeros(track_img.rows, track_img.cols, CV_8UC1);
-        // }
-        // cv::imshow("plane_detection_img", plane_detection_img);
-        // char c = cv::waitKey(2);
-        // if(c == 'w' || c == 'W') {
-        //     set_algorithm_wait_flag(false);
-        //     notify_algorithm();
-        // }
-        // else if( c == 'q' || c == 'Q') {
-        //     set_algorithm_wait_flag(true);
-        //     notify_algorithm();
-        // }
-            
-        // Swap frames and Process Events
-		pangolin::FinishFrame();
-	    if(need_reset) reset_internal();
+    if(pangolin::Pushed(*mRuntimeInfo->pb_step_by_step)) {
+        notify_algorithm();
+        set_algorithm_wait_flag(true);
     }
-    printf("Finished pangolin run\n");
+
+    if(pangolin::Pushed(*mRuntimeInfo->pb_start_algorithm)) {
+        notify_algorithm();
+        set_algorithm_wait_flag(false);
+    }
+
+    Eigen::Matrix4f Twc = Eigen::Matrix4f::Identity();
+    Twc.block<3, 3>(0, 0) = cur_r_wc.toRotationMatrix();
+    Twc.block<3, 1>(0, 3) = cur_t_wc;
+
+    pangolin::OpenGlMatrix TwcGL;
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            TwcGL.m[i*4+j] = Twc(j, i);
+        }
+    }
+    pangolin::OpenGlMatrix OwGL;
+    OwGL.SetIdentity(); // Initialize to identity matrix
+    OwGL.m[12] = cur_t_wc.x(); // px
+    OwGL.m[13] = cur_t_wc.y(); // py
+    OwGL.m[14] = cur_t_wc.z(); // pz
+
+    if (*mRuntimeInfo->pb_follow_camera && b_follow_camera) {
+        if (b_camera_view) {
+            mRuntimeInfo->Visualization3D_camera->Follow(TwcGL);
+        } else {
+            mRuntimeInfo->Visualization3D_camera->Follow(OwGL);
+        }
+    } else if (*mRuntimeInfo->pb_follow_camera && !b_follow_camera) {
+        if (b_camera_view) {
+            mRuntimeInfo->Visualization3D_camera->SetProjectionMatrix(
+                pangolin::ProjectionMatrix(w, h, 500, 500, w/2, h/2, 0.1, 1000)
+            );
+            mRuntimeInfo->Visualization3D_camera->SetModelViewMatrix(
+                pangolin::ModelViewLookAt(0, -0.7, -1.8, 0, 0, 0, 0.0, -1.0, 0.0)
+            );
+            mRuntimeInfo->Visualization3D_camera->Follow(TwcGL);
+        } else {
+            mRuntimeInfo->Visualization3D_camera->SetProjectionMatrix(
+                pangolin::ProjectionMatrix(w, h, 3000, 3000, w/2, h/2, 0.1, 1000)
+            );
+            mRuntimeInfo->Visualization3D_camera->SetModelViewMatrix(
+                pangolin::ModelViewLookAt(0, 0.01, 10, 0, 0, 0, 0.0, 0.0, 1.0)
+            );
+            mRuntimeInfo->Visualization3D_camera->Follow(OwGL);
+        }
+        b_follow_camera = true;
+    } else if (!*mRuntimeInfo->pb_follow_camera && b_follow_camera) {
+        b_follow_camera = false;
+    }
+    if (*mRuntimeInfo->pb_camera_view) {
+        *mRuntimeInfo->pb_camera_view = false;
+        b_camera_view = true;
+        mRuntimeInfo->Visualization3D_camera->SetProjectionMatrix(
+            pangolin::ProjectionMatrix(w, h, 500,500, w/2, h/2, 0.1, 10000)
+        );
+        mRuntimeInfo->Visualization3D_camera->SetModelViewMatrix(
+            pangolin::ModelViewLookAt(0,-0.7,-1.8, 0,0,0, 0.0, -1.0, 0.0)
+        );
+        mRuntimeInfo->Visualization3D_camera->Follow(TwcGL);
+    }
+    // follow_camera(cur_t_wc, cur_r_wc);
+
+
+    mRuntimeInfo->Visualization3D_display->Activate(*mRuntimeInfo->Visualization3D_camera);
+    glClearColor(1.0f,1.0f,1.0f,1.0f);
+
+    if(b_show_trajectory) {
+        draw_trajectory(vio_traj, Eigen::Vector3f(0.0f, 1.0f, 0.0f));
+        draw_trajectory_gt(traj_gt, Eigen::Vector3f(1.0f, 0.0f, 0.0f));
+        draw_current_camera(cur_t_wc, cur_r_wc);
+        draw_current_camera(cur_t_wc_gt, cur_r_wc_gt);
+    }
+    if(b_show_3D_points) {
+        draw_3D_points(cur_slam_pts, Eigen::Vector3f(1.0f, 0.0f, 0.0f), 8);
+        draw_3D_points(cur_msckf_pts, Eigen::Vector3f(0.0f, 0.0f, 1.0f), 8);
+    }
+    if(b_show_history_points) {
+        draw_history_3D_points(Eigen::Vector3f(0.5f, 0.5f, 0.5f), 4);
+    }
+    if(b_show_plane_tri_points) {
+        draw_plane_history_tri_points(Eigen::Vector3f(1.0f, 0.5f, 0.0f), 4);
+    }
+    if(b_show_plane_vio_stable_points) {
+        draw_plane_history_vio_stable_points(Eigen::Vector3f(0.0f, 0.0f, 1.0f), 4);
+    }
+    if(b_show_plane) {
+        draw_history_plane_horizontal();
+        draw_history_plane_vertical();
+    }
+
+    lk3d.unlock();
+
+    mutex_img.lock();
+    if(track_img_changed) mRuntimeInfo->tex_track.Upload(track_img.data, GL_BGR, GL_UNSIGNED_BYTE);
+    mutex_img.unlock();
+
+    {   
+        mRuntimeInfo->track_result->Activate();
+        glColor4f(1.0f,1.0f,1.0f,1.0f);
+        mRuntimeInfo->tex_track.RenderToViewportFlipY();
+        track_img_changed = false;
+    }
+
+    mutex_plane_img.lock();
+    if(plane_detection_img_changed) mRuntimeInfo->tex_plane_detection.Upload(plane_detection_img.data, GL_BGR, GL_UNSIGNED_BYTE);
+    mutex_plane_img.unlock();
+
+    {   
+        mRuntimeInfo->plane_detection_result->Activate();
+        glColor4f(1.0f,1.0f,1.0f,1.0f);
+        mRuntimeInfo->tex_plane_detection.RenderToViewportFlipY();
+        plane_detection_img_changed = false;
+    }
+    
+    {
+        this->b_follow_camera = (*mRuntimeInfo->pb_follow_camera).Get();
+        this->b_show_3D_points = (*mRuntimeInfo->pb_show_points).Get();
+        this->b_show_trajectory = (*mRuntimeInfo->pb_show_traj).Get();
+        this->b_show_history_points = (*mRuntimeInfo->pb_show_history_points).Get();
+        this->b_show_plane_tri_points = (*mRuntimeInfo->pb_show_history_plane_tri_points).Get();
+        this->b_show_plane_vio_stable_points = (*mRuntimeInfo->pb_show_history_plane_vio_stable_points).Get();
+        this->b_show_plane = (*mRuntimeInfo->pb_show_plane).Get();
+
+        this->b_show_est_bg = (*mRuntimeInfo->pb_show_est_bg).Get();
+        this->b_show_est_ba = (*mRuntimeInfo->pb_show_est_ba).Get();
+        this->b_show_est_dt = (*mRuntimeInfo->pb_show_est_timeoffset).Get();
+        this->b_show_est_vel = (*mRuntimeInfo->pb_show_est_vel).Get();
+        this->b_show_est_extrin_t = (*mRuntimeInfo->pb_show_est_extrin_trans).Get();
+    }
+
+    if(b_show_est_dt) {
+        mRuntimeInfo->plotter_dt->ClearSeries();
+        mRuntimeInfo->plotter_dt->ClearMarkers();
+        mRuntimeInfo->plotter_dt->AddSeries("$0", "$1", pangolin::DrawingModeLine, pangolin::Colour::Red(), "timeoffset", &vio_dt_data_log);
+        mRuntimeInfo->plotter_dt->AddMarker(pangolin::Marker::Vertical, cur_t, pangolin::Marker::Equal, pangolin::Colour::White());
+    }
+
+    if(b_show_est_extrin_t) {
+        mRuntimeInfo->plotter_extrin_t->ClearSeries();
+        mRuntimeInfo->plotter_extrin_t->ClearMarkers();
+        mRuntimeInfo->plotter_extrin_t->AddSeries("$0", "$1", pangolin::DrawingModeLine, pangolin::Colour::Red(), "extrin x", &vio_extrin_t_data_log);
+        mRuntimeInfo->plotter_extrin_t->AddSeries("$0", "$2", pangolin::DrawingModeLine, pangolin::Colour::Green(), "extrin y", &vio_extrin_t_data_log);
+        mRuntimeInfo->plotter_extrin_t->AddSeries("$0", "$3", pangolin::DrawingModeLine, pangolin::Colour::Blue(), "extrin z", &vio_extrin_t_data_log);
+        mRuntimeInfo->plotter_extrin_t->AddMarker(pangolin::Marker::Vertical, cur_t, pangolin::Marker::Equal, pangolin::Colour::White());
+    }
+
+    if(b_show_est_vel) {
+        mRuntimeInfo->plotter_vel->ClearSeries();
+        mRuntimeInfo->plotter_vel->ClearMarkers();
+        mRuntimeInfo->plotter_vel->AddSeries("$0", "$1", pangolin::DrawingModeLine, pangolin::Colour::Red(), "vel x", &vio_vel_data_log);
+        mRuntimeInfo->plotter_vel->AddSeries("$0", "$2", pangolin::DrawingModeLine, pangolin::Colour::Green(), "vel y", &vio_vel_data_log);
+        mRuntimeInfo->plotter_vel->AddSeries("$0", "$3", pangolin::DrawingModeLine, pangolin::Colour::Blue(), "vel z", &vio_vel_data_log);
+        mRuntimeInfo->plotter_vel->AddMarker(pangolin::Marker::Vertical, cur_t, pangolin::Marker::Equal, pangolin::Colour::White());
+    }
+
+    if(b_show_est_bg) {
+        mRuntimeInfo->plotter_bg->ClearSeries();
+        mRuntimeInfo->plotter_bg->ClearMarkers();
+        mRuntimeInfo->plotter_bg->AddSeries("$0", "$1", pangolin::DrawingModeLine, pangolin::Colour::Red(), "gyro bias x", &vio_bg_data_log);
+        mRuntimeInfo->plotter_bg->AddSeries("$0", "$2", pangolin::DrawingModeLine, pangolin::Colour::Green(), "gyro bias y", &vio_bg_data_log);
+        mRuntimeInfo->plotter_bg->AddSeries("$0", "$3", pangolin::DrawingModeLine, pangolin::Colour::Blue(), "gyro bias z", &vio_bg_data_log);
+        mRuntimeInfo->plotter_bg->AddMarker(pangolin::Marker::Vertical, cur_t, pangolin::Marker::Equal, pangolin::Colour::White());
+    }
+
+    if(b_show_est_ba) {
+        mRuntimeInfo->plotter_ba->ClearSeries();
+        mRuntimeInfo->plotter_ba->ClearMarkers();
+        mRuntimeInfo->plotter_ba->AddSeries("$0", "$1", pangolin::DrawingModeLine, pangolin::Colour::Red(), "accel bias x", &vio_ba_data_log);
+        mRuntimeInfo->plotter_ba->AddSeries("$0", "$2", pangolin::DrawingModeLine, pangolin::Colour::Green(), "accel bias y", &vio_ba_data_log);
+        mRuntimeInfo->plotter_ba->AddSeries("$0", "$3", pangolin::DrawingModeLine, pangolin::Colour::Blue(), "accel bias z", &vio_ba_data_log);
+        mRuntimeInfo->plotter_ba->AddMarker(pangolin::Marker::Vertical, cur_t, pangolin::Marker::Equal, pangolin::Colour::White());
+    }
+
+    //usleep(5000);
+    // control step and step debug, stupid implementation 
+    // should improved with keyboard response thread
+    // cv::Mat response_img = cv::Mat::zeros(100, 100, CV_8UC1);
+    // cv::imshow("keyboard response", response_img);
+    // if(plane_detection_img.empty()) {
+    //     plane_detection_img = cv::Mat::zeros(track_img.rows, track_img.cols, CV_8UC1);
+    // }
+    // cv::imshow("plane_detection_img", plane_detection_img);
+    // char c = cv::waitKey(2);
+    // if(c == 'w' || c == 'W') {
+    //     set_algorithm_wait_flag(false);
+    //     notify_algorithm();
+    // }
+    // else if( c == 'q' || c == 'Q') {
+    //     set_algorithm_wait_flag(true);
+    //     notify_algorithm();
+    // }
+        
+    // Swap frames and Process Events
+    pangolin::FinishFrame();
+    if(need_reset) reset_internal();
+}
+
+bool PangolinViewer::extern_should_quit() {
+    return !pangolin::ShouldQuit() && running;
 }
 
 // main publish function =============================
