@@ -15,7 +15,7 @@ set(CMAKE_CXX_STANDARD 14)
 
 add_library(
     pangolin_viewer_lib
-    SHARED
+    STATIC
     PangolinViewer.cpp PangolinViewer.h)
 target_link_libraries(
     pangolin_viewer_lib
