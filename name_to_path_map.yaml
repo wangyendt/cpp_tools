@@ -1,2 +1,3 @@
 viola: basic/viola
 pangolin: visualization/pangolin
+sliding_window_dsp: dsp/sliding_window
