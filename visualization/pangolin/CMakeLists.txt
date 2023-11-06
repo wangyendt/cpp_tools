@@ -3,6 +3,7 @@ project(PangolinViewerPy)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_STANDARD 14)
+set(SOURCE_ROOT ${CMAKE_SOURCE_DIR}/src)
 
 list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/pybind11")
 # list(APPEND CMAKE_PREFIX_PATH "/usr/local/include")
@@ -15,7 +16,8 @@ find_package(Pangolin REQUIRED)
 add_library(
     pangolin_viewer_lib
     STATIC
-    PangolinViewer.cpp PangolinViewer.h)
+    ${SOURCE_ROOT}/PangolinViewer.cpp
+    ${SOURCE_ROOT}/PangolinViewer.h)
 target_link_libraries(
     pangolin_viewer_lib
     PUBLIC
@@ -24,6 +26,7 @@ target_link_libraries(
 target_include_directories(
     pangolin_viewer_lib 
     PUBLIC
+    ${SOURCE_ROOT}
     ${EIGEN3_INCLUDE_DIR}
     ${OpenCV_INCLUDE_DIRS}
     ${Pangolin_INCLUDE_DIRS}
@@ -38,4 +41,4 @@ target_link_libraries(
 set_target_properties(
     pangolin_viewer 
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY
-    ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+    ${CMAKE_SOURCE_DIR}/lib)

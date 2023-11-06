@@ -12,7 +12,7 @@ import os
 import sys
 
 sys.path.append('./lib')
-os.system("mkdir -p build_mac && cd build_mac && cmake .. && make -j12")
+os.system("mkdir -p build && cd build && cmake .. && make -j12")
 import pangolin_viewer
 import numpy as np
 
