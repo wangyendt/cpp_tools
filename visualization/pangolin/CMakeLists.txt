@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.12)
 project(PangolinViewerPy)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(CMAKE_CXX_STANDARD 14)
 
 list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/pybind11")
 # list(APPEND CMAKE_PREFIX_PATH "/usr/local/include")
@@ -10,8 +11,6 @@ find_package(pybind11 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Pangolin REQUIRED)
-
-set(CMAKE_CXX_STANDARD 14)
 
 add_library(
     pangolin_viewer_lib
