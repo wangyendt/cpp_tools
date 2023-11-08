@@ -28,7 +28,7 @@ viewer.set_img_resolution(752, 480)
 # viewer.run()
 viewer.view_init()
 cur_pos = np.zeros((100, 3))
-while viewer.should_quit():
+while viewer.should_not_quit():
     random_walk = random_walk_3d(100)
     cur_pos = cur_pos + random_walk
     viewer.publish_3D_points(cur_pos, cur_pos)

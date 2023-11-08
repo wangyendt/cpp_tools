@@ -24,7 +24,7 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         .def("join", &PangolinViewer::join)
         .def("reset", &PangolinViewer::reset)
 		.def("view_init", &PangolinViewer::extern_init)
-		.def("should_quit", &PangolinViewer::extern_should_quit)
+		.def("should_not_quit", &PangolinViewer::extern_should_not_quit)
 		.def("show", &PangolinViewer::extern_run_single_step, py::arg("delay_time_in_s"))
         .def("set_img_resolution", &PangolinViewer::set_img_resolution, py::arg("width"), py::arg("height"))
         .def("publish_traj", &PangolinViewer::publish_traj, py::arg("q_wc"), py::arg("t_wc"))
@@ -50,13 +50,13 @@ PYBIND11_MODULE(pangolin_viewer, m) {
 		})
         .def("publish_track_img", [](PangolinViewer &self, py::array_t<unsigned char> &img) {
             py::buffer_info buf = img.request();
-            cv::Mat mat(static_cast<int>(buf.shape[0]), static_cast<int>(buf.shape[1]), CV_8UC1, buf.ptr);
+            cv::Mat mat(static_cast<int>(buf.shape[0]), static_cast<int>(buf.shape[1]), CV_8UC3, buf.ptr);
             self.publish_track_img(mat);
         })
         .def("publish_vio_opt_data", &PangolinViewer::publish_vio_opt_data, py::arg("vals"))
         .def("publish_plane_detection_img", [](PangolinViewer &self, py::array_t<unsigned char> &img) {
             py::buffer_info buf = img.request();
-            cv::Mat mat(static_cast<int>(buf.shape[0]), static_cast<int>(buf.shape[1]), CV_8UC1, buf.ptr);
+            cv::Mat mat(static_cast<int>(buf.shape[0]), static_cast<int>(buf.shape[1]), CV_8UC3, buf.ptr);
             self.publish_plane_detection_img(mat);
         })
 		.def("publish_plane_triangulate_pts", [](PangolinViewer &self, const std::map<size_t, py::EigenDRef<Eigen::Vector3f>>& pts) {

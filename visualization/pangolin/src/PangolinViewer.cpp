@@ -132,7 +132,7 @@ void PangolinViewer::reset_internal()
 void PangolinViewer::run()
 {
     extern_init();
-    while (extern_should_quit())
+    while (extern_should_not_quit())
     {
         extern_run_single_step();
     }
@@ -416,7 +416,7 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
     if(need_reset) reset_internal();
 }
 
-bool PangolinViewer::extern_should_quit() {
+bool PangolinViewer::extern_should_not_quit() {
     return !pangolin::ShouldQuit() && running;
 }
 

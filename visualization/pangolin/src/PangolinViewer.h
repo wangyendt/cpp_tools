@@ -25,7 +25,7 @@ public:
   void reset();
   void extern_init();
   void extern_run_single_step(float delay_time_in_s = 0.0);
-  bool extern_should_quit();
+  bool extern_should_not_quit();
 
   // set the resolution for track img
   void set_img_resolution(int width, int height) {
