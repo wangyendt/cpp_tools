@@ -142,7 +142,7 @@ void PangolinViewer::run()
 void PangolinViewer::extern_init() {
 	printf("START PANGOLIN FOR VIEWING!\n");
     pangolin::CreateWindowAndBind("Main", 4 * w, 3 * h);
-	const int UI_WIDTH = 180;
+	const int UI_WIDTH = 200;
 	glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -161,7 +161,7 @@ void PangolinViewer::extern_init() {
     mRuntimeInfo->tex_track.Reinitialise(track_img_width, track_img_height, GL_RGB, false, 0, GL_RGB, GL_UNSIGNED_BYTE);
 
     pangolin::CreateDisplay()
-		  .SetBounds(0.0, 0.3, pangolin::Attach::Pix(UI_WIDTH), 0.3)
+		  .SetBounds(0.0, 0.35, pangolin::Attach::Pix(UI_WIDTH), 0.3)
 		  .SetLayout(pangolin::LayoutEqual)
 		  .AddDisplay(*mRuntimeInfo->track_result);
 
@@ -170,38 +170,38 @@ void PangolinViewer::extern_init() {
     mRuntimeInfo->tex_plane_detection.Reinitialise(track_img_width, track_img_height, GL_RGB, false, 0, GL_RGB, GL_UNSIGNED_BYTE);
 
     pangolin::CreateDisplay()
-		  .SetBounds(0.3, 0.6, pangolin::Attach::Pix(UI_WIDTH), 0.3)
+		  .SetBounds(0.35, 0.7, pangolin::Attach::Pix(UI_WIDTH), 0.3)
 		  .SetLayout(pangolin::LayoutEqual)
 		  .AddDisplay(*mRuntimeInfo->plane_detection_result);
 
     // for dt plot 
-    pangolin::View& plot_dt_display = pangolin::CreateDisplay().SetBounds(0.95, 1.0, 0.4, 1.0);
+    pangolin::View& plot_dt_display = pangolin::CreateDisplay().SetBounds(0.95, 1.0, pangolin::Attach::Pix(UI_WIDTH), 1.0);
     mRuntimeInfo->plotter_dt = new pangolin::Plotter(&vio_dt_data_log, 0.0, 300, -0.1, 0.1, 0.01f, 0.01f);
     mRuntimeInfo->plotter_dt->ClearSeries();
     mRuntimeInfo->plotter_dt->ClearMarkers();
     plot_dt_display.AddDisplay(*mRuntimeInfo->plotter_dt);
 
     // for extrinsic translation plot 
-    pangolin::View& plot_extrin_t_display = pangolin::CreateDisplay().SetBounds(0.9, 0.95, 0.4, 1.0);
+    pangolin::View& plot_extrin_t_display = pangolin::CreateDisplay().SetBounds(0.9, 0.95, pangolin::Attach::Pix(UI_WIDTH), 1.0);
     mRuntimeInfo->plotter_extrin_t = new pangolin::Plotter(&vio_extrin_t_data_log, 0.0, 300, -0.01, 0.01, 0.01f, 0.01f);
     mRuntimeInfo->plotter_extrin_t->ClearSeries();
     mRuntimeInfo->plotter_extrin_t->ClearMarkers();
     plot_extrin_t_display.AddDisplay(*mRuntimeInfo->plotter_extrin_t);
 
     // for velocity 
-    pangolin::View& plot_vel_display = pangolin::CreateDisplay().SetBounds(0.85, 0.9, 0.4, 1.0);
+    pangolin::View& plot_vel_display = pangolin::CreateDisplay().SetBounds(0.85, 0.9, pangolin::Attach::Pix(UI_WIDTH), 1.0);
     mRuntimeInfo->plotter_vel = new pangolin::Plotter(&vio_vel_data_log, 0.0, 300, -2, 2, 0.01f, 0.01f);
     mRuntimeInfo->plotter_vel->ClearSeries();
     mRuntimeInfo->plotter_vel->ClearMarkers();
     plot_vel_display.AddDisplay(*mRuntimeInfo->plotter_vel);
 
     // for bg 
-    pangolin::View& plot_bg_display = pangolin::CreateDisplay().SetBounds(0.80, 0.85, 0.4, 1.0);
+    pangolin::View& plot_bg_display = pangolin::CreateDisplay().SetBounds(0.80, 0.85, pangolin::Attach::Pix(UI_WIDTH), 1.0);
     mRuntimeInfo->plotter_bg = new pangolin::Plotter(&vio_bg_data_log, 0.0, 300, -0.05, 0.05, 0.01f, 0.01f);
     plot_bg_display.AddDisplay(*mRuntimeInfo->plotter_bg);
 
     // for ba 
-    pangolin::View& plot_ba_display = pangolin::CreateDisplay().SetBounds(0.75, 0.80, 0.4, 1.0);
+    pangolin::View& plot_ba_display = pangolin::CreateDisplay().SetBounds(0.75, 0.80, pangolin::Attach::Pix(UI_WIDTH), 1.0);
     mRuntimeInfo->plotter_ba = new pangolin::Plotter(&vio_bg_data_log, 0.0, 300, -0.1, 0.1, 0.01f, 0.01f);
     plot_ba_display.AddDisplay(*mRuntimeInfo->plotter_ba);
 
@@ -283,7 +283,22 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
 
 
     mRuntimeInfo->Visualization3D_display->Activate(*mRuntimeInfo->Visualization3D_camera);
-    glClearColor(1.0f,1.0f,1.0f,1.0f);
+    glClearColor(0.0f,0.0f,0.0f,1.0f);
+
+    // pangolin::glDrawColouredCube();
+
+    glLineWidth(3);
+    glBegin(GL_LINES);
+    glColor3f(1, 0, 0);
+    glVertex3f(0, 0, 0);
+    glVertex3f(0.2, 0, 0);
+    glColor3f(0, 1, 0);
+    glVertex3f(0, 0, 0);
+    glVertex3f(0, 0.2, 0);
+    glColor3f(0, 0, 1);
+    glVertex3f(0, 0, 0);
+    glVertex3f(0, 0, 0.2);
+    glEnd();
 
     if(b_show_trajectory) {
         draw_trajectory(vio_traj, Eigen::Vector3f(0.0f, 1.0f, 0.0f));
@@ -560,7 +575,7 @@ void PangolinViewer::publish_vio_opt_data(std::vector<float> vals)
 void PangolinViewer::draw_current_camera(
         const Eigen::Vector3f &p,
         const Eigen::Quaternionf &q,
-        Eigen::Vector3f color,
+        Eigen::Vector4f color,
         float cam_size)
 {
     Eigen::Vector3f center = p;
@@ -568,16 +583,16 @@ void PangolinViewer::draw_current_camera(
     const float length = cam_size;
     Eigen::Vector3f m_cam[5] = {
         Eigen::Vector3f(0.0f, 0.0f, 0.0f),
-        Eigen::Vector3f(-length, -length, length),
-        Eigen::Vector3f(-length, length, length),
-        Eigen::Vector3f(length, length, length),
-        Eigen::Vector3f(length, -length, length)
+        Eigen::Vector3f(-length * 0.75, -length * 0.4, length * 0.6),
+        Eigen::Vector3f(-length * 0.75, length * 0.4, length * 0.6),
+        Eigen::Vector3f(length * 0.75, length * 0.4, length * 0.6),
+        Eigen::Vector3f(length * 0.75, -length * 0.4, length * 0.6)
     };
 
     for (int i = 0; i < 5; ++i)
         m_cam[i] = q * m_cam[i] + center;
     // [0;0;0], [X;Y;Z], [X;-Y;Z], [-X;Y;Z], [-X;-Y;Z]
-    glColor3fv(&color(0));
+    glColor4fv(&color(0));
     glBegin(GL_LINE_LOOP);
     glVertex3fv(m_cam[0].data());
     glVertex3fv(m_cam[1].data());

@@ -27,7 +27,16 @@ PYBIND11_MODULE(pangolin_viewer, m) {
 		.def("should_not_quit", &PangolinViewer::extern_should_not_quit)
 		.def("show", &PangolinViewer::extern_run_single_step, py::arg("delay_time_in_s"))
         .def("set_img_resolution", &PangolinViewer::set_img_resolution, py::arg("width"), py::arg("height"))
-        .def("publish_traj", &PangolinViewer::publish_traj, py::arg("q_wc"), py::arg("t_wc"))
+        // .def("publish_traj", &PangolinViewer::publish_traj, py::arg("q_wc"), py::arg("t_wc"))
+        .def("publish_traj", [](PangolinViewer& self, py::array_t<float>& t_wc, py::array_t<float>& q_wc) {
+			assert(t_wc.ndim() == 1 && t_wc.shape(0) == 3);
+			assert(q_wc.ndim() == 1 && q_wc.shape(0) == 4);
+			py::buffer_info t_wc_info = t_wc.request();
+			Eigen::Vector3f t_wc_eigen(static_cast<float*>(t_wc_info.ptr));
+			py::buffer_info q_wc_info = q_wc.request();
+			Eigen::Quaternionf q_wc_eigen(static_cast<float*>(q_wc_info.ptr));
+			self.publish_traj(q_wc_eigen, t_wc_eigen);
+		}, py::arg("t_wc"), py::arg("q_wc"))
         .def("publish_3D_points", static_cast<void (PangolinViewer::*)(std::vector<Eigen::Vector3f>&, std::vector<Eigen::Vector3f>&)>(&PangolinViewer::publish_3D_points), py::arg("slam_pts"), py::arg("msckf_pts"))
         .def("publish_3D_points", static_cast<void (PangolinViewer::*)(std::map<size_t, Eigen::Vector3f>&, std::vector<Eigen::Vector3f>&)>(&PangolinViewer::publish_3D_points), py::arg("slam_pts"), py::arg("msckf_pts"))
 		.def("publish_3D_points", [](PangolinViewer& self, py::array_t<float>& slam_pts, py::array_t<float>& msckf_pts) {

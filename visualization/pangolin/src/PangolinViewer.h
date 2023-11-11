@@ -131,10 +131,9 @@ private:
   std::shared_ptr<RuntimeInfo> mRuntimeInfo;
 
   // helper function
-  void
-  draw_current_camera(const Eigen::Vector3f &p, const Eigen::Quaternionf &q,
-                      Eigen::Vector3f color = Eigen::Vector3f(0.0f, 0.0f, 1.0f),
-                      float cam_size = 0.2f);
+  void draw_current_camera(const Eigen::Vector3f &p, const Eigen::Quaternionf &q,
+                           Eigen::Vector4f color = Eigen::Vector4f(0.0f, 1.0f, 1.0f, 1.0f),
+                           float cam_size = 0.2f);
 
   void follow_camera(const Eigen::Vector3f &p, const Eigen::Quaternionf &q);
 
