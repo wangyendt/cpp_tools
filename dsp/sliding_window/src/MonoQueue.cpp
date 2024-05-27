@@ -16,7 +16,7 @@ void MonoQueue::push(double val) {
         m_deque.pop_back();
     }
     m_deque.emplace_back(val, count);
-    cnt = std::min({cnt + 1, win + 1});
+    cnt = std::min(cnt + 1, win + 1);
     if (cnt > win) {
         pop();
     }
