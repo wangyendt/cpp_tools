@@ -1,5 +1,15 @@
-viola: viola
-cw_tools: cw_tools
-pangolin: visualization/pangolin
-sliding_window_dsp: dsp/sliding_window
-adb_logcat_reader: adb
+viola:
+  name: viola
+  buildable: true
+cw_tools:
+  name: cw_tools
+  buildable: false
+pangolin:
+  name: visualization/pangolin
+  buildable: true
+sliding_window_dsp:
+  name: dsp/sliding_window
+  buildable: true
+adb_logcat_reader:
+  name: adb
+  buildable: true
