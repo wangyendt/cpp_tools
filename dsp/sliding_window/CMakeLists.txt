@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 project(dsp_sliding_window)
 
 set(CMAKE_CXX_STANDARD 14)
-set(SOURCE_ROOT ${CMAKE_SOURCE_DIR}/src)
+set(SOURCE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt")
 list(APPEND CMAKE_PREFIX_PATH "/usr/local/include")
@@ -29,15 +29,15 @@ add_library(
 target_include_directories(
 	dsp_sliding_window
 	PUBLIC
-	${CMAKE_SOURCE_DIR}/src
+	${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 set_target_properties(
     dsp_sliding_window 
     PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY
-    ${CMAKE_SOURCE_DIR}/lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib
     LIBRARY_OUTPUT_DIRECTORY
-    ${CMAKE_SOURCE_DIR}/lib)
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 
 pybind11_add_module(dsp_sw dsp_sw_pybind.cpp)
 target_link_libraries(
@@ -47,4 +47,4 @@ target_link_libraries(
 set_target_properties(
 	dsp_sw
 	PROPERTIES LIBRARY_OUTPUT_DIRECTORY
-	${CMAKE_SOURCE_DIR}/lib)
+	${CMAKE_CURRENT_SOURCE_DIR}/lib)

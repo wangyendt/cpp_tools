@@ -3,7 +3,7 @@ project(PangolinViewerPy)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_STANDARD 14)
-set(SOURCE_ROOT ${CMAKE_SOURCE_DIR}/src)
+set(SOURCE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt")
 list(APPEND CMAKE_PREFIX_PATH "/usr/local/include")
@@ -45,9 +45,9 @@ set_target_properties(
     pangolin_viewer_lib 
     PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY
-    ${CMAKE_SOURCE_DIR}/lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib
     LIBRARY_OUTPUT_DIRECTORY
-    ${CMAKE_SOURCE_DIR}/lib)
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 
 # Assuming PangolinViewer_pybind.cpp contains your pybind11 bindings
 pybind11_add_module(pangolin_viewer pangolin_viewer_pybind.cpp)
@@ -58,4 +58,4 @@ target_link_libraries(
 set_target_properties(
     pangolin_viewer 
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY
-    ${CMAKE_SOURCE_DIR}/lib)
+    ${CMAKE_CURRENT_SOURCE_DIR}/lib)
