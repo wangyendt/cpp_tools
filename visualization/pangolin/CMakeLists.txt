@@ -5,6 +5,14 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_STANDARD 14)
 set(SOURCE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
+option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
+if(BUILD_SHARED_LIBS)
+    set(LIBRARY_TYPE SHARED)
+else()
+    set(LIBRARY_TYPE STATIC)
+endif()
+
+
 list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt")
 list(APPEND CMAKE_PREFIX_PATH "/usr/local/include")
 include_directories("/opt/homebrew/opt")
@@ -15,13 +23,6 @@ find_package(pybind11 REQUIRED)
 find_package(OpenCV 4 REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Pangolin REQUIRED)
-
-option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
-if(BUILD_SHARED_LIBS)
-    set(LIBRARY_TYPE SHARED)
-else()
-    set(LIBRARY_TYPE STATIC)
-endif()
 
 
 add_library(
