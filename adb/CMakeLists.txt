@@ -4,7 +4,10 @@ project(adb_log)
 set(CMAKE_CXX_STANDARD 14)
 set(SOURCE_ROOT ${CMAKE_SOURCE_DIR}/src)
 
-list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/pybind11")
+list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt")
+list(APPEND CMAKE_PREFIX_PATH "/usr/local/include")
+include_directories("/opt/homebrew/opt")
+include_directories("/usr/local/include")
 
 find_package(pybind11 REQUIRED)
 
