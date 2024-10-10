@@ -3,7 +3,7 @@ project(ethz_apriltag2)
 
 add_definitions(-fPIC -O3)
 
-find_package(catkin REQUIRED)
+# find_package(catkin REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
 
@@ -17,7 +17,8 @@ include_directories(include ${EIGEN3_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
 #library
 file(GLOB SOURCE_FILES "src/*.cc")
 add_library(${PROJECT_NAME}  ${SOURCE_FILES})
-target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS} ${catkin_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS})
+# target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS} ${catkin_LIBRARIES})
 
 # #demo
 # if(NOT APPLE)
