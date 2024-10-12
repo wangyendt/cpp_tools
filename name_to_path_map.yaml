@@ -13,7 +13,7 @@ sliding_window_dsp:
 adb_logcat_reader:
   path: adb
   buildable: true
-corner_detection:
-  path: cv/corner_detection
+apriltag_detection:
+  path: cv/apriltag_detection
   buildable: true
 

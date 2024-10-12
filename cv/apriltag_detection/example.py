@@ -14,7 +14,7 @@ import os
 sys.path.append('./lib')
 os.system("mkdir -p build && cd build && cmake .. && make -j12")
 
-import corner_detection_py
+import apriltag_detection
 import numpy as np
 import cv2
 
@@ -42,9 +42,9 @@ image = cv2.imread('test.png')
 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
 # 创建 TagDetector
-tag_codes = corner_detection_py.tag_codes_36h11()
+tag_codes = apriltag_detection.tag_codes_36h11()
 black_border = 2
-detector = corner_detection_py.TagDetector(tag_codes, black_border)
+detector = apriltag_detection.TagDetector(tag_codes, black_border)
 
 # 检测标签
 detections = detector.extract_tags(gray)

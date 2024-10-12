@@ -13,7 +13,7 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(corner_detection_py, m) {
+PYBIND11_MODULE(apriltag_detection, m) {
     py::class_<AprilTags::TagDetection>(m, "TagDetection")
         .def(py::init<>())
         .def_readwrite("id", &AprilTags::TagDetection::id)
