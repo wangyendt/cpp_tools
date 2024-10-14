@@ -38,7 +38,7 @@ else:
 
 
 # 加载图像
-image = cv2.imread('test.png')
+image = cv2.imread(img_path)
 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
 # 创建 TagDetector
