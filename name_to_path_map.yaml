@@ -16,4 +16,6 @@ adb_logcat_reader:
 apriltag_detection:
   path: cv/apriltag_detection
   buildable: true
-
+camera_models:
+  path: cv/camera_models
+  buildable: true
