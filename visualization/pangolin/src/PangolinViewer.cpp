@@ -70,6 +70,24 @@ PangolinViewer::PangolinViewer(int w, int h, bool start_run_thread)
 
     plane_detection_img_changed = false; 
     //plane_detection_img = cv::Mat::zeros(track_img_width, track_img_height, CV_8UC3);
+    
+    // 初始化点云管理
+    frame_point_clouds.clear();
+    
+    // 初始化颜色映射
+    color_map["red"] = Eigen::Vector3f(1.0f, 0.0f, 0.0f);
+    color_map["green"] = Eigen::Vector3f(0.0f, 1.0f, 0.0f);
+    color_map["blue"] = Eigen::Vector3f(0.0f, 0.0f, 1.0f);
+    color_map["yellow"] = Eigen::Vector3f(1.0f, 1.0f, 0.0f);
+    color_map["cyan"] = Eigen::Vector3f(0.0f, 1.0f, 1.0f);
+    color_map["magenta"] = Eigen::Vector3f(1.0f, 0.0f, 1.0f);
+    color_map["white"] = Eigen::Vector3f(1.0f, 1.0f, 1.0f);
+    color_map["black"] = Eigen::Vector3f(0.0f, 0.0f, 0.0f);
+    color_map["gray"] = Eigen::Vector3f(0.5f, 0.5f, 0.5f);
+    color_map["orange"] = Eigen::Vector3f(1.0f, 0.5f, 0.0f);
+    color_map["purple"] = Eigen::Vector3f(0.5f, 0.0f, 0.5f);
+    color_map["brown"] = Eigen::Vector3f(0.6f, 0.3f, 0.1f);
+    color_map["pink"] = Eigen::Vector3f(1.0f, 0.75f, 0.8f);
 
     if(start_run_thread) {
         run_thread = std::thread(&PangolinViewer::run, this);
@@ -110,6 +128,12 @@ void PangolinViewer::reset_internal()
     cur_msckf_pts.clear();
     his_slam_pts.clear();
     his_plane_tri_pts.clear();
+
+    // 清空点云数据
+    {
+        std::unique_lock<std::mutex> lock(mutex_point_clouds);
+        frame_point_clouds.clear();
+    }
 
     vio_dt_data_log.Clear();
     vio_extrin_t_data_log.Clear();
@@ -307,8 +331,12 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
         draw_current_camera(cur_t_wc_gt, cur_r_wc_gt);
     }
     if(b_show_3D_points) {
+        // 绘制原始点
         draw_3D_points(cur_slam_pts, Eigen::Vector3f(1.0f, 0.0f, 0.0f), 8);
         draw_3D_points(cur_msckf_pts, Eigen::Vector3f(0.0f, 0.0f, 1.0f), 8);
+        
+        // 绘制单帧点云
+        draw_all_point_clouds();
     }
     if(b_show_history_points) {
         draw_history_3D_points(Eigen::Vector3f(0.5f, 0.5f, 0.5f), 4);
@@ -790,4 +818,89 @@ void PangolinViewer::draw_trajectory_gt(const std::vector<Eigen::Vector3f> &traj
     }
     glEnd();
     return;
+}
+
+Eigen::Vector3f PangolinViewer::parse_color_name(const std::string& color_name) {
+    auto it = color_map.find(color_name);
+    if (it != color_map.end()) {
+        return it->second;
+    }
+    // 默认红色
+    return Eigen::Vector3f(1.0f, 0.0f, 0.0f);
+}
+
+void PangolinViewer::clear_all_points() {
+    std::unique_lock<std::mutex> lock(mutex_point_clouds);
+    frame_point_clouds.clear();
+}
+
+void PangolinViewer::add_points(const std::vector<Eigen::Vector3f>& points, 
+                             const Eigen::Vector3f& color,
+                             const std::string& label,
+                             float point_size) {
+    if (!b_show_3D_points || points.empty()) return;
+    
+    std::unique_lock<std::mutex> lock(mutex_point_clouds);
+    
+    PointCloud cloud(label.empty() ? "cloud_" + std::to_string(frame_point_clouds.size()) : label);
+    cloud.point_size = point_size;
+    
+    for (const auto& point : points) {
+        cloud.points.emplace_back(point, color, label);
+    }
+    
+    frame_point_clouds.push_back(std::move(cloud));
+}
+
+void PangolinViewer::add_points(const std::vector<Eigen::Vector3f>& points, 
+                             const std::vector<Eigen::Vector3f>& colors,
+                             const std::string& label,
+                             float point_size) {
+    if (!b_show_3D_points || points.empty()) return;
+    
+    std::unique_lock<std::mutex> lock(mutex_point_clouds);
+    
+    PointCloud cloud(label.empty() ? "cloud_" + std::to_string(frame_point_clouds.size()) : label);
+    cloud.point_size = point_size;
+    
+    size_t color_idx = 0;
+    for (const auto& point : points) {
+        const Eigen::Vector3f& color = (color_idx < colors.size()) ? colors[color_idx++] : Eigen::Vector3f(1.0f, 0.0f, 0.0f);
+        cloud.points.emplace_back(point, color, label);
+    }
+    
+    frame_point_clouds.push_back(std::move(cloud));
+}
+
+void PangolinViewer::add_points_with_color_name(const std::vector<Eigen::Vector3f>& points, 
+                                            const std::string& color_name,
+                                            const std::string& label,
+                                            float point_size) {
+    Eigen::Vector3f color = parse_color_name(color_name);
+    add_points(points, color, label, point_size);
+}
+
+// 绘制单个点云
+void PangolinViewer::draw_3D_points(const PointCloud& point_cloud, float pt_size) {
+    if (point_cloud.points.empty()) return;
+    
+    // 使用点云自带的大小或者默认大小
+    float point_size = (point_cloud.point_size > 0) ? point_cloud.point_size : pt_size;
+    glPointSize(point_size);
+    glBegin(GL_POINTS);
+    
+    for (const auto& point : point_cloud.points) {
+        glColor3f(point.color.x(), point.color.y(), point.color.z());
+        glVertex3f(point.position.x(), point.position.y(), point.position.z());
+    }
+    
+    glEnd();
+}
+
+// 绘制所有点云
+void PangolinViewer::draw_all_point_clouds(float pt_size) {
+    std::unique_lock<std::mutex> lock(mutex_point_clouds);
+    for (const auto& cloud : frame_point_clouds) {
+        draw_3D_points(cloud, pt_size);
+    }
 }

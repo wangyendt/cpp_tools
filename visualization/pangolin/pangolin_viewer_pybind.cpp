@@ -27,8 +27,91 @@ PYBIND11_MODULE(pangolin_viewer, m) {
 		.def("should_not_quit", &PangolinViewer::extern_should_not_quit)
 		.def("show", &PangolinViewer::extern_run_single_step, py::arg("delay_time_in_s"))
         .def("set_img_resolution", &PangolinViewer::set_img_resolution, py::arg("width"), py::arg("height"))
-        // .def("publish_traj", &PangolinViewer::publish_traj, py::arg("q_wc"), py::arg("t_wc"))
-        .def("publish_traj", [](PangolinViewer& self, py::array_t<float>& t_wc, py::array_t<float>& q_wc) {
+        
+        // 新的点云可视化API
+        .def("clear_all_points", &PangolinViewer::clear_all_points)
+        
+        // 添加点云 - 基本版本（单一颜色）
+        .def("add_points", [](PangolinViewer& self, py::array_t<float>& points, 
+                             py::array_t<float>& color, const std::string& label="", float point_size=4.0f) {
+            // 检查输入点数组
+            if (points.ndim() != 2 || points.shape(1) != 3) {
+                throw std::runtime_error("Points array must be of shape (N, 3)");
+            }
+            
+            // 检查颜色数组
+            if (color.ndim() != 1 || color.shape(0) != 3) {
+                throw std::runtime_error("Color array must be of shape (3,)");
+            }
+            
+            // 转换点数组
+            std::vector<Eigen::Vector3f> points_vec;
+            auto r = points.unchecked<2>();
+            for (ssize_t i = 0; i < r.shape(0); ++i) {
+                points_vec.emplace_back(r(i, 0), r(i, 1), r(i, 2));
+            }
+            
+            // 转换颜色
+            auto c = color.unchecked<1>();
+            Eigen::Vector3f color_vec(c(0), c(1), c(2));
+            
+            // 调用C++方法
+            self.add_points(points_vec, color_vec, label, point_size);
+        }, py::arg("points"), py::arg("color"), py::arg("label") = "", py::arg("point_size") = 4.0f)
+        
+        // 添加点云 - 颜色名称版本
+        .def("add_points_with_color_name", [](PangolinViewer& self, py::array_t<float>& points, 
+                                            const std::string& color_name="red", const std::string& label="", 
+                                            float point_size=4.0f) {
+            // 检查输入点数组
+            if (points.ndim() != 2 || points.shape(1) != 3) {
+                throw std::runtime_error("Points array must be of shape (N, 3)");
+            }
+            
+            // 转换点数组
+            std::vector<Eigen::Vector3f> points_vec;
+            auto r = points.unchecked<2>();
+            for (ssize_t i = 0; i < r.shape(0); ++i) {
+                points_vec.emplace_back(r(i, 0), r(i, 1), r(i, 2));
+            }
+            
+            // 调用C++方法
+            self.add_points_with_color_name(points_vec, color_name, label, point_size);
+        }, py::arg("points"), py::arg("color_name") = "red", py::arg("label") = "", py::arg("point_size") = 4.0f)
+        
+        // 添加点云 - 多颜色版本（改名为add_points_with_colors避免Python无法区分重载）
+        .def("add_points_with_colors", [](PangolinViewer& self, py::array_t<float>& points, 
+                             py::array_t<float>& colors, const std::string& label="", float point_size=4.0f) {
+            // 检查输入点数组
+            if (points.ndim() != 2 || points.shape(1) != 3) {
+                throw std::runtime_error("Points array must be of shape (N, 3)");
+            }
+            
+            // 检查颜色数组
+            if (colors.ndim() != 2 || colors.shape(1) != 3) {
+                throw std::runtime_error("Colors array must be of shape (N, 3)");
+            }
+            
+            // 转换点数组
+            std::vector<Eigen::Vector3f> points_vec;
+            auto r = points.unchecked<2>();
+            for (ssize_t i = 0; i < r.shape(0); ++i) {
+                points_vec.emplace_back(r(i, 0), r(i, 1), r(i, 2));
+            }
+            
+            // 转换颜色数组
+            std::vector<Eigen::Vector3f> colors_vec;
+            auto c = colors.unchecked<2>();
+            for (ssize_t i = 0; i < c.shape(0); ++i) {
+                colors_vec.emplace_back(c(i, 0), c(i, 1), c(i, 2));
+            }
+            
+            // 调用C++方法
+            self.add_points(points_vec, colors_vec, label, point_size);
+        }, py::arg("points"), py::arg("colors"), py::arg("label") = "", py::arg("point_size") = 4.0f)
+        
+        // 原有API (保持兼容性)
+        .def("publish_traj", [](PangolinViewer& self, py::array_t<float> t_wc, py::array_t<float> q_wc) {
 			assert(t_wc.ndim() == 1 && t_wc.shape(0) == 3);
 			assert(q_wc.ndim() == 1 && q_wc.shape(0) == 4);
 			py::buffer_info t_wc_info = t_wc.request();

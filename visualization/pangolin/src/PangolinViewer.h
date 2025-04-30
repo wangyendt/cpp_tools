@@ -3,6 +3,7 @@
 
 #include <condition_variable>
 #include <thread>
+#include <unordered_map>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -33,7 +34,47 @@ public:
     track_img_height = height;
   }
 
-  // send the visulize info we need
+  // 通用点云结构体
+  struct Point3D {
+    Eigen::Vector3f position;
+    Eigen::Vector3f color;  // RGB颜色，范围0.0-1.0
+    std::string label;
+
+    Point3D(const Eigen::Vector3f& pos, const Eigen::Vector3f& col = Eigen::Vector3f(1.0f, 0.0f, 0.0f), 
+           const std::string& lbl = "") : position(pos), color(col), label(lbl) {}
+  };
+
+  // 点云集合
+  struct PointCloud {
+    std::string name;
+    std::vector<Point3D> points;
+    float point_size = 4.0f;  // 点大小
+    
+    PointCloud(const std::string& n = "default") : name(n) {}
+  };
+
+  // 在每次渲染循环开始时清除所有点云
+  void clear_all_points();
+  
+  // 添加单帧要显示的点云
+  void add_points(const std::vector<Eigen::Vector3f>& points, 
+                const Eigen::Vector3f& color = Eigen::Vector3f(1.0f, 0.0f, 0.0f),
+                const std::string& label = "",
+                float point_size = 4.0f);
+  
+  // 添加单帧要显示的点云，带单独点颜色
+  void add_points(const std::vector<Eigen::Vector3f>& points, 
+                const std::vector<Eigen::Vector3f>& colors,
+                const std::string& label = "",
+                float point_size = 4.0f);
+  
+  // 添加单帧要显示的点云，使用颜色名称
+  void add_points_with_color_name(const std::vector<Eigen::Vector3f>& points, 
+                                const std::string& color_name = "red",
+                                const std::string& label = "",
+                                float point_size = 4.0f);
+
+  // 原有API (保持兼容性)
   void publish_traj(Eigen::Quaternionf &q_wc, Eigen::Vector3f &t_wc);
   void publish_3D_points(std::vector<Eigen::Vector3f> &slam_pts,
                          std::vector<Eigen::Vector3f> &msckf_pts);
@@ -69,6 +110,9 @@ private:
   void reset_internal();
   void set_algorithm_wait_flag(bool flag) { algorithm_wait_flag = flag; }
 
+  // 从颜色名称解析为RGB值
+  Eigen::Vector3f parse_color_name(const std::string& color_name);
+
   std::thread run_thread;
   bool running;
   int w, h;
@@ -81,6 +125,13 @@ private:
   std::condition_variable cv;
 
 private:
+  // 单帧点云数据 - 每次渲染循环都会更新
+  std::vector<PointCloud> frame_point_clouds;
+  std::mutex mutex_point_clouds;
+  
+  // 预定义颜色映射
+  std::unordered_map<std::string, Eigen::Vector3f> color_map;
+
   // data we need to draw
   Eigen::Vector3f cur_t_wc;
   Eigen::Quaternionf cur_r_wc;
@@ -137,8 +188,14 @@ private:
 
   void follow_camera(const Eigen::Vector3f &p, const Eigen::Quaternionf &q);
 
+  // 旧的绘制方法
   void draw_3D_points(const std::vector<Eigen::Vector3f> &points,
                       Eigen::Vector3f color, float pt_size);
+  
+  // 新的绘制方法
+  void draw_3D_points(const PointCloud &point_cloud, float pt_size);
+  void draw_all_point_clouds(float pt_size = 4.0f);
+  
   void draw_history_3D_points(Eigen::Vector3f color, float pt_size);
   void draw_trajectory(const std::vector<Eigen::Vector3f> &traj,
                        Eigen::Vector3f color = Eigen::Vector3f(1.0f, 0.0f,
