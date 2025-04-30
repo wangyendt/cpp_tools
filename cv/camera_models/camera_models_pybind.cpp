@@ -150,7 +150,7 @@ PYBIND11_MODULE(camera_models, m) {
         // .def("estimate_intrinsics", ...) // Requires cv::Mat caster
         // .def("estimate_extrinsics", ...) // Requires cv::Mat caster
         // .def("init_undistort_rectify_map", ...) // Requires cv::Mat caster
-        .def("reprojection_dist", &Camera::reprojectionDist, py::arg("P1"), py::arg("P2"))
+        .def("reprojection_dist", &Camera::reprojectionDist, py::arg("P1"), py::arg("P2"), "Calculate reprojection distance between two 3D points")
         .def("reprojection_error", py::overload_cast<const Eigen::Vector3d&, const Eigen::Quaterniond&, const Eigen::Vector3d&, const Eigen::Vector2d&>(&Camera::reprojectionError, py::const_),
              py::arg("P"), py::arg("camera_q"), py::arg("camera_t"), py::arg("observed_p"))
         // .def("project_points", ...) // Requires cv::Mat caster
@@ -186,7 +186,13 @@ PYBIND11_MODULE(camera_models, m) {
             Eigen::Vector2d d_u;
             self.distortion(p_u, d_u);
             return d_u;
-        }, py::arg("p_u"), "Calculate distortion for a normalized point")
+        }, py::arg("p_u"), "Calculate distortion vector for a normalized point")
+        .def("distortion_with_jacobian", [](const PinholeCamera& self, const Eigen::Vector2d& p_u) {
+            Eigen::Vector2d d_u;
+            Eigen::Matrix2d J;
+            self.distortion(p_u, d_u, J);
+            return std::make_tuple(d_u, J);
+        }, py::arg("p_u"), "Calculate distortion vector and its Jacobian")
         .def("set_no_distortion", &PinholeCamera::setNoDistortion, py::arg("b_noDistortion"))
         .def("read_parameters", &PinholeCamera::readParameters, py::arg("parameter_vec"))
         .def("write_parameters", [](const PinholeCamera& self) {
@@ -230,7 +236,13 @@ PYBIND11_MODULE(camera_models, m) {
             Eigen::Vector2d d_u;
             self.distortion(p_u, d_u);
             return d_u;
-        }, py::arg("p_u"), "Calculate distortion for a normalized point")
+        }, py::arg("p_u"), "Calculate distortion vector for a normalized point")
+        .def("distortion_with_jacobian", [](const PinholeFullCamera& self, const Eigen::Vector2d& p_u) {
+            Eigen::Vector2d d_u;
+            Eigen::Matrix2d J;
+            self.distortion(p_u, d_u, J);
+            return std::make_tuple(d_u, J);
+        }, py::arg("p_u"), "Calculate distortion vector and its Jacobian")
         .def("lift_projective_scaled", [](const PinholeFullCamera& self, const Eigen::Vector2d& p, float image_scale) {
             Eigen::Vector3d P;
             self.liftProjective(p, P, image_scale);
@@ -246,7 +258,14 @@ PYBIND11_MODULE(camera_models, m) {
             std::vector<double> params;
             self.writeParameters(params);
             return params;
-        });
+        })
+        .def("get_principle", &PinholeFullCamera::getPrinciple, "Get principle point (cx, cy)")
+        .def("space_to_plane_with_jacobian", [](const PinholeFullCamera& self, const Eigen::Vector3d& P) {
+            Eigen::Vector2d p;
+            Eigen::Matrix<double, 2, 3> J;
+            self.spaceToPlane(P, p, J);
+            return std::make_tuple(p, J);
+        }, py::arg("P"), "Project 3D point to 2D plane and return Jacobian");
 
 
     // --- CataCamera (MEI) ---
@@ -280,7 +299,19 @@ PYBIND11_MODULE(camera_models, m) {
             Eigen::Vector2d d_u;
             self.distortion(p_u, d_u);
             return d_u;
-        }, py::arg("p_u"), "Calculate distortion for a normalized point")
+        }, py::arg("p_u"), "Calculate distortion vector for a normalized point")
+        .def("distortion_with_jacobian", [](const CataCamera& self, const Eigen::Vector2d& p_u) {
+            Eigen::Vector2d d_u;
+            Eigen::Matrix2d J;
+            self.distortion(p_u, d_u, J);
+            return std::make_tuple(d_u, J);
+        }, py::arg("p_u"), "Calculate distortion vector and its Jacobian")
+        .def("space_to_plane_with_jacobian", [](const CataCamera& self, const Eigen::Vector3d& P) {
+            Eigen::Vector2d p;
+            Eigen::Matrix<double, 2, 3> J;
+            self.spaceToPlane(P, p, J);
+            return std::make_tuple(p, J);
+        }, py::arg("P"), "Project 3D point to 2D plane and return Jacobian")
         .def("read_parameters", &CataCamera::readParameters, py::arg("parameter_vec"))
         .def("write_parameters", [](const CataCamera& self) {
             std::vector<double> params;
@@ -314,6 +345,12 @@ PYBIND11_MODULE(camera_models, m) {
         .def(py::init<const EquidistantCamera::Parameters&>(), py::arg("params"))
         .def("get_parameters", [](const EquidistantCamera& self) { return EquidistantCamera::Parameters(self.getParameters()); }, py::return_value_policy::copy, "Get a copy of the camera parameters")
         .def("set_parameters", &EquidistantCamera::setParameters, py::arg("parameters"))
+        .def("space_to_plane_with_jacobian", [](const EquidistantCamera& self, const Eigen::Vector3d& P) {
+            Eigen::Vector2d p;
+            Eigen::Matrix<double, 2, 3> J;
+            self.spaceToPlane(P, p, J);
+            return std::make_tuple(p, J);
+        }, py::arg("P"), "Project 3D point to 2D plane and return Jacobian")
         .def("read_parameters", &EquidistantCamera::readParameters, py::arg("parameter_vec"))
         .def("write_parameters", [](const EquidistantCamera& self) {
             std::vector<double> params;
@@ -374,9 +411,10 @@ PYBIND11_MODULE(camera_models, m) {
              std::vector<double> paramVec;
             OCAMCamera tempCam(params); // Create temporary instance to get param vector
             tempCam.writeParameters(paramVec);
-            OCAMCamera::SphereToPlane<double>(paramVec.data(), P.cast<double>(), p);
+            OCAMCamera::SphereToPlane<double>(paramVec.data(), P.cast<double>(), p); // Cast Eigen types explicitly if needed
             return p;
         }, py::arg("params"), py::arg("P"), "Static: Project sphere point to plane using parameters")
+        .def("parameter_count", &OCAMCamera::parameterCount)
         .def("read_parameters", &OCAMCamera::readParameters, py::arg("parameter_vec"))
         .def("write_parameters", [](const OCAMCamera& self) {
             std::vector<double> params;
