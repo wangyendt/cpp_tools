@@ -8,12 +8,14 @@
 namespace py = pybind11;
 
 PYBIND11_MAKE_OPAQUE(std::vector<Eigen::Vector3f>);
+PYBIND11_MAKE_OPAQUE(std::vector<Eigen::Matrix4f>);
 PYBIND11_MAKE_OPAQUE(std::map<size_t, Eigen::Vector3f>);
 PYBIND11_MAKE_OPAQUE(std::map<size_t, std::vector<Eigen::Vector3f>>);
 
 
 PYBIND11_MODULE(pangolin_viewer, m) {
     py::bind_vector<std::vector<Eigen::Vector3f>>(m, "VectorVector3f");
+    py::bind_vector<std::vector<Eigen::Matrix4f>>(m, "VectorMatrix4f");
     py::bind_map<std::map<size_t, Eigen::Vector3f>>(m, "MapSizeTVector3f");
     py::bind_map<std::map<size_t, std::vector<Eigen::Vector3f>>>(m, "MapSizeTVectorVector3f");
 
@@ -109,6 +111,114 @@ PYBIND11_MODULE(pangolin_viewer, m) {
             // 调用C++方法
             self.add_points(points_vec, colors_vec, label, point_size);
         }, py::arg("points"), py::arg("colors"), py::arg("label") = "", py::arg("point_size") = 4.0f)
+        
+        // ===== 新增轨迹 API 绑定 =====
+        .def("clear_all_trajectories", &PangolinViewer::clear_all_trajectories)
+
+        .def("add_trajectory_se3", [](PangolinViewer& self, 
+                                   py::array_t<float, py::array::c_style | py::array::forcecast> poses_se3,
+                                   py::array_t<float>& color,
+                                   const std::string& label = "",
+                                   float line_width = 1.0f,
+                                   bool show_cameras = false,
+                                   float camera_size = 0.05f) {
+            // 检查输入 SE3 数组
+            if (poses_se3.ndim() != 3 || poses_se3.shape(1) != 4 || poses_se3.shape(2) != 4) {
+                throw std::runtime_error("Poses array must be of shape (N, 4, 4)");
+            }
+            // 检查颜色数组
+            if (color.ndim() != 1 || color.shape(0) != 3) {
+                throw std::runtime_error("Color array must be of shape (3,)");
+            }
+
+            // 转换 SE3 数组
+            std::vector<Eigen::Matrix4f> poses_vec;
+            auto r = poses_se3.unchecked<3>();
+            for (ssize_t i = 0; i < r.shape(0); ++i) {
+                Eigen::Matrix4f pose;
+                for (ssize_t row = 0; row < 4; ++row) {
+                    for (ssize_t col = 0; col < 4; ++col) {
+                        pose(row, col) = r(i, row, col);
+                    }
+                }
+                poses_vec.push_back(pose);
+            }
+
+            // 转换颜色
+            auto c = color.unchecked<1>();
+            Eigen::Vector3f color_vec(c(0), c(1), c(2));
+
+            // 调用 C++ 方法
+            self.add_trajectory_se3(poses_vec, color_vec, label, line_width, show_cameras, camera_size);
+        }, py::arg("poses_se3"), py::arg("color"), py::arg("label") = "", py::arg("line_width") = 1.0f, 
+           py::arg("show_cameras") = false, py::arg("camera_size") = 0.05f)
+
+        .def("add_trajectory_quat", [](PangolinViewer& self,
+                                    py::array_t<float>& positions,
+                                    py::array_t<float>& orientations,
+                                    py::array_t<float>& color,
+                                    const std::string& quat_format = "wxyz", // 'xyzw' or 'wxyz', 'JPL' or 'Hamilton'
+                                    const std::string& label = "",
+                                    float line_width = 1.0f,
+                                    bool show_cameras = false,
+                                    float camera_size = 0.05f) {
+            // 检查输入数组
+            if (positions.ndim() != 2 || positions.shape(1) != 3) {
+                throw std::runtime_error("Positions array must be of shape (N, 3)");
+            }
+            if (orientations.ndim() != 2 || orientations.shape(1) != 4) {
+                throw std::runtime_error("Orientations array must be of shape (N, 4)");
+            }
+            if (positions.shape(0) != orientations.shape(0)) {
+                throw std::runtime_error("Number of positions and orientations must match");
+            }
+             // 检查颜色数组
+            if (color.ndim() != 1 || color.shape(0) != 3) {
+                throw std::runtime_error("Color array must be of shape (3,)");
+            }
+
+            // 转换位置数组
+            std::vector<Eigen::Vector3f> positions_vec;
+            auto pos_r = positions.unchecked<2>();
+            for (ssize_t i = 0; i < pos_r.shape(0); ++i) {
+                positions_vec.emplace_back(pos_r(i, 0), pos_r(i, 1), pos_r(i, 2));
+            }
+
+            // 转换方向数组 (处理格式)
+            std::vector<Eigen::Quaternionf> orientations_vec;
+            auto ori_r = orientations.unchecked<2>();
+            bool is_wxyz = (quat_format.find("wxyz") != std::string::npos);
+            bool is_jpl = (quat_format.find("JPL") != std::string::npos);
+
+            for (ssize_t i = 0; i < ori_r.shape(0); ++i) {
+                float qx = is_wxyz ? ori_r(i, 1) : ori_r(i, 0);
+                float qy = is_wxyz ? ori_r(i, 2) : ori_r(i, 1);
+                float qz = is_wxyz ? ori_r(i, 3) : ori_r(i, 2);
+                float qw = is_wxyz ? ori_r(i, 0) : ori_r(i, 3);
+                
+                // Eigen::Quaternionf 构造函数是 (w, x, y, z)
+                Eigen::Quaternionf q(qw, qx, qy, qz);
+                
+                // 如果是 JPL (ROS1/ROS2等), x,y,z需要取反以匹配Hamilton (Eigen/Pangolin)
+                // 注意：这里假设输入已经是JPL或Hamilton之一，直接按存储顺序读
+                // 如果还需要根据 'JPL' 标记来反转 x, y, z，则取消下面的注释
+                // if (is_jpl) {
+                //     q = Eigen::Quaternionf(qw, -qx, -qy, -qz);
+                // }
+                
+                q.normalize();
+                orientations_vec.push_back(q);
+            }
+
+            // 转换颜色
+            auto c = color.unchecked<1>();
+            Eigen::Vector3f color_vec(c(0), c(1), c(2));
+
+            // 调用 C++ 方法
+            self.add_trajectory_quat(positions_vec, orientations_vec, color_vec, label, line_width, show_cameras, camera_size);
+        }, py::arg("positions"), py::arg("orientations"), py::arg("color"), 
+           py::arg("quat_format") = "wxyz", py::arg("label") = "", py::arg("line_width") = 1.0f, 
+           py::arg("show_cameras") = false, py::arg("camera_size") = 0.05f)
         
         // 原有API (保持兼容性)
         .def("publish_traj", [](PangolinViewer& self, py::array_t<float> t_wc, py::array_t<float> q_wc) {

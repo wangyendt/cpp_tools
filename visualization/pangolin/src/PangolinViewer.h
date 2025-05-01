@@ -53,6 +53,47 @@ public:
     PointCloud(const std::string& n = "default") : name(n) {}
   };
 
+  // ===== 新增轨迹结构体 =====
+  struct TrajectoryPose {
+      Eigen::Vector3f position;
+      Eigen::Quaternionf orientation;
+
+      TrajectoryPose(const Eigen::Vector3f& p, const Eigen::Quaternionf& q) 
+          : position(p), orientation(q) {}
+  };
+
+  struct Trajectory {
+      std::string name;
+      std::vector<TrajectoryPose> poses;
+      Eigen::Vector3f color = Eigen::Vector3f(0.0f, 1.0f, 0.0f); // 默认绿色
+      float line_width = 1.0f;
+      float camera_size = 0.05f; // 0表示不绘制相机模型
+      bool show_cameras = false; // 是否绘制相机模型
+
+      Trajectory(const std::string& n = "default_traj") : name(n) {}
+  };
+
+  // ===== 新增轨迹API =====
+  // 在每次渲染循环开始时清除所有额外添加的轨迹
+  void clear_all_trajectories();
+
+  // 添加轨迹段（位姿用四元数表示）
+  void add_trajectory_quat(const std::vector<Eigen::Vector3f>& positions,
+                           const std::vector<Eigen::Quaternionf>& orientations,
+                           const Eigen::Vector3f& color = Eigen::Vector3f(0.0f, 1.0f, 0.0f),
+                           const std::string& label = "",
+                           float line_width = 1.0f,
+                           bool show_cameras = false,
+                           float camera_size = 0.05f);
+
+  // 添加轨迹段（位姿用SE3矩阵表示）
+  void add_trajectory_se3(const std::vector<Eigen::Matrix4f>& poses_se3,
+                         const Eigen::Vector3f& color = Eigen::Vector3f(0.0f, 1.0f, 0.0f),
+                         const std::string& label = "",
+                         float line_width = 1.0f,
+                         bool show_cameras = false,
+                         float camera_size = 0.05f);
+
   // 在每次渲染循环开始时清除所有点云
   void clear_all_points();
   
@@ -112,6 +153,8 @@ private:
 
   // 从颜色名称解析为RGB值
   Eigen::Vector3f parse_color_name(const std::string& color_name);
+  // SE3矩阵转四元数+位移
+  void se3_to_quat_trans(const Eigen::Matrix4f& se3, Eigen::Quaternionf& q, Eigen::Vector3f& t);
 
   std::thread run_thread;
   bool running;
@@ -128,6 +171,10 @@ private:
   // 单帧点云数据 - 每次渲染循环都会更新
   std::vector<PointCloud> frame_point_clouds;
   std::mutex mutex_point_clouds;
+  
+  // 单帧轨迹数据 - 每次渲染循环都会更新
+  std::vector<Trajectory> frame_trajectories;
+  std::mutex mutex_trajectories;
   
   // 预定义颜色映射
   std::unordered_map<std::string, Eigen::Vector3f> color_map;
@@ -200,6 +247,12 @@ private:
   void draw_trajectory(const std::vector<Eigen::Vector3f> &traj,
                        Eigen::Vector3f color = Eigen::Vector3f(1.0f, 0.0f,
                                                                0.0f));
+  
+  // ===== 新增轨迹绘制函数 =====
+  void draw_trajectory_line(const Trajectory& trajectory);
+  void draw_trajectory_cameras(const Trajectory& trajectory);
+  void draw_all_trajectories(); // 在渲染循环中调用
+
   void draw_plane_history_tri_points(Eigen::Vector3f color, float pt_size);
   void draw_plane_history_vio_stable_points(Eigen::Vector3f color,
                                             float pt_size);

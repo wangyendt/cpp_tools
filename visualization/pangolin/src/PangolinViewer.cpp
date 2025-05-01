@@ -134,6 +134,11 @@ void PangolinViewer::reset_internal()
         std::unique_lock<std::mutex> lock(mutex_point_clouds);
         frame_point_clouds.clear();
     }
+    // 清空轨迹数据
+    {
+        std::unique_lock<std::mutex> lock(mutex_trajectories);
+        frame_trajectories.clear();
+    }
 
     vio_dt_data_log.Clear();
     vio_extrin_t_data_log.Clear();
@@ -351,6 +356,9 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
         draw_history_plane_horizontal();
         draw_history_plane_vertical();
     }
+
+    // 绘制所有额外轨迹
+    draw_all_trajectories();
 
     lk3d.unlock();
 
@@ -903,4 +911,102 @@ void PangolinViewer::draw_all_point_clouds(float pt_size) {
     for (const auto& cloud : frame_point_clouds) {
         draw_3D_points(cloud, pt_size);
     }
+}
+
+// ===== 新增轨迹实现 =====
+void PangolinViewer::clear_all_trajectories() {
+    std::unique_lock<std::mutex> lock(mutex_trajectories);
+    frame_trajectories.clear();
+}
+
+void PangolinViewer::add_trajectory_quat(const std::vector<Eigen::Vector3f>& positions,
+                                     const std::vector<Eigen::Quaternionf>& orientations,
+                                     const Eigen::Vector3f& color,
+                                     const std::string& label,
+                                     float line_width,
+                                     bool show_cameras,
+                                     float camera_size) {
+    if (positions.empty()) return;
+    if (positions.size() != orientations.size()) {
+        // 可以选择抛出异常或打印警告
+        std::cerr << "Warning: Trajectory positions and orientations size mismatch for label '" << label << "'. Skipping." << std::endl;
+        return;
+    }
+
+    std::unique_lock<std::mutex> lock(mutex_trajectories);
+    
+    Trajectory traj(label.empty() ? "traj_" + std::to_string(frame_trajectories.size()) : label);
+    traj.color = color;
+    traj.line_width = line_width;
+    traj.show_cameras = show_cameras;
+    traj.camera_size = camera_size;
+
+    for (size_t i = 0; i < positions.size(); ++i) {
+        traj.poses.emplace_back(positions[i], orientations[i]);
+    }
+    
+    frame_trajectories.push_back(std::move(traj));
+}
+
+void PangolinViewer::add_trajectory_se3(const std::vector<Eigen::Matrix4f>& poses_se3,
+                                    const Eigen::Vector3f& color,
+                                    const std::string& label,
+                                    float line_width,
+                                    bool show_cameras,
+                                    float camera_size) {
+    if (poses_se3.empty()) return;
+
+    std::unique_lock<std::mutex> lock(mutex_trajectories);
+    
+    Trajectory traj(label.empty() ? "traj_" + std::to_string(frame_trajectories.size()) : label);
+    traj.color = color;
+    traj.line_width = line_width;
+    traj.show_cameras = show_cameras;
+    traj.camera_size = camera_size;
+
+    for (const auto& se3 : poses_se3) {
+        Eigen::Quaternionf q;
+        Eigen::Vector3f t;
+        se3_to_quat_trans(se3, q, t);
+        traj.poses.emplace_back(t, q);
+    }
+    
+    frame_trajectories.push_back(std::move(traj));
+}
+
+// ===== 新增轨迹绘制实现 =====
+void PangolinViewer::draw_trajectory_line(const Trajectory& trajectory) {
+    if (trajectory.poses.size() < 2) return;
+
+    glLineWidth(trajectory.line_width);
+    glColor3fv(trajectory.color.data());
+    glBegin(GL_LINE_STRIP);
+    for (const auto& pose : trajectory.poses) {
+        glVertex3fv(pose.position.data());
+    }
+    glEnd();
+}
+
+void PangolinViewer::draw_trajectory_cameras(const Trajectory& trajectory) {
+    if (!trajectory.show_cameras || trajectory.camera_size <= 0) return;
+    
+    Eigen::Vector4f color_rgba(trajectory.color.x(), trajectory.color.y(), trajectory.color.z(), 1.0f);
+    for (const auto& pose : trajectory.poses) {
+        // 使用现有的draw_current_camera绘制每个位姿的相机模型
+        draw_current_camera(pose.position, pose.orientation, color_rgba, trajectory.camera_size);
+    }
+}
+
+void PangolinViewer::draw_all_trajectories() {
+    std::unique_lock<std::mutex> lock(mutex_trajectories);
+    for (const auto& traj : frame_trajectories) {
+        draw_trajectory_line(traj);
+        draw_trajectory_cameras(traj);
+    }
+}
+
+void PangolinViewer::se3_to_quat_trans(const Eigen::Matrix4f& se3, Eigen::Quaternionf& q, Eigen::Vector3f& t) {
+    t = se3.block<3, 1>(0, 3);
+    q = Eigen::Quaternionf(se3.block<3, 3>(0, 0));
+    q.normalize();
 }
