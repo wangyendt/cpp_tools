@@ -34,7 +34,7 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         .def("clear_all_points", &PangolinViewer::clear_all_points)
         
         // 添加点云 - 基本版本（单一颜色）
-        .def("add_points", [](PangolinViewer& self, py::array_t<float>& points, 
+        .def("add_points", [=](PangolinViewer& self, py::array_t<float>& points, 
                              py::array_t<float>& color, const std::string& label="", float point_size=4.0f) {
             // 检查输入点数组
             if (points.ndim() != 2 || points.shape(1) != 3) {
@@ -62,7 +62,7 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         }, py::arg("points"), py::arg("color"), py::arg("label") = "", py::arg("point_size") = 4.0f)
         
         // 添加点云 - 颜色名称版本
-        .def("add_points_with_color_name", [](PangolinViewer& self, py::array_t<float>& points, 
+        .def("add_points_with_color_name", [=](PangolinViewer& self, py::array_t<float>& points, 
                                             const std::string& color_name="red", const std::string& label="", 
                                             float point_size=4.0f) {
             // 检查输入点数组
@@ -82,7 +82,7 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         }, py::arg("points"), py::arg("color_name") = "red", py::arg("label") = "", py::arg("point_size") = 4.0f)
         
         // 添加点云 - 多颜色版本（改名为add_points_with_colors避免Python无法区分重载）
-        .def("add_points_with_colors", [](PangolinViewer& self, py::array_t<float>& points, 
+        .def("add_points_with_colors", [=](PangolinViewer& self, py::array_t<float>& points, 
                              py::array_t<float>& colors, const std::string& label="", float point_size=4.0f) {
             // 检查输入点数组
             if (points.ndim() != 2 || points.shape(1) != 3) {
@@ -115,7 +115,7 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         // ===== 新增轨迹 API 绑定 =====
         .def("clear_all_trajectories", &PangolinViewer::clear_all_trajectories)
 
-        .def("add_trajectory_se3", [](PangolinViewer& self, 
+        .def("add_trajectory_se3", [=](PangolinViewer& self, 
                                    py::array_t<float, py::array::c_style | py::array::forcecast> poses_se3,
                                    py::array_t<float>& color,
                                    const std::string& label = "",
@@ -153,7 +153,7 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         }, py::arg("poses_se3"), py::arg("color"), py::arg("label") = "", py::arg("line_width") = 1.0f, 
            py::arg("show_cameras") = false, py::arg("camera_size") = 0.05f)
 
-        .def("add_trajectory_quat", [](PangolinViewer& self,
+        .def("add_trajectory_quat", [=](PangolinViewer& self,
                                     py::array_t<float>& positions,
                                     py::array_t<float>& orientations,
                                     py::array_t<float>& color,
@@ -224,7 +224,7 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         .def("clear_all_cameras", &PangolinViewer::clear_all_cameras)
         .def("set_main_camera", &PangolinViewer::set_main_camera, py::arg("camera_id"))
 
-        .def("add_camera_se3", [](PangolinViewer& self,
+        .def("add_camera_se3", [=](PangolinViewer& self,
                                  py::array_t<float, py::array::c_style | py::array::forcecast> pose_se3,
                                  py::array_t<float>& color,
                                  const std::string& label = "",
@@ -256,7 +256,7 @@ PYBIND11_MODULE(pangolin_viewer, m) {
             return self.add_camera_se3(pose_mat, color_vec, label, scale, line_width);
         }, py::arg("pose_se3"), py::arg("color"), py::arg("label") = "", py::arg("scale") = 0.1f, py::arg("line_width") = 1.0f)
 
-        .def("add_camera_quat", [](PangolinViewer& self,
+        .def("add_camera_quat", [=](PangolinViewer& self,
                                   py::array_t<float>& position,
                                   py::array_t<float>& orientation,
                                   py::array_t<float>& color,
@@ -304,7 +304,7 @@ PYBIND11_MODULE(pangolin_viewer, m) {
 
         // ===== 新增平面 API 绑定 =====
         .def("clear_all_planes", &PangolinViewer::clear_all_planes)
-        .def("add_plane", [](PangolinViewer& self, 
+        .def("add_plane", [=](PangolinViewer& self, 
                             py::array_t<float>& vertices, 
                             py::array_t<float>& color, 
                             float alpha=0.5f, 
@@ -335,7 +335,7 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         }, py::arg("vertices"), py::arg("color"), py::arg("alpha") = 0.5f, py::arg("label") = "")
         
         // 新增：绑定基于法线、中心、尺寸的add_plane
-        .def("add_plane_normal_center", [](PangolinViewer& self,
+        .def("add_plane_normal_center", [=](PangolinViewer& self,
                                         py::array_t<float>& normal,
                                         py::array_t<float>& center,
                                         float size,
@@ -367,7 +367,7 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         
         // ===== 新增直线 API 绑定 =====
         .def("clear_all_lines", &PangolinViewer::clear_all_lines)
-        .def("add_line", [](PangolinViewer& self,
+        .def("add_line", [=](PangolinViewer& self,
                            py::array_t<float>& start_point,
                            py::array_t<float>& end_point,
                            py::array_t<float>& color,
@@ -398,7 +398,7 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         }, py::arg("start_point"), py::arg("end_point"), py::arg("color"), py::arg("line_width") = 1.0f, py::arg("label") = "")
 
         // ===== 修改后的图像 API 绑定 =====
-        .def("add_image_1", [](PangolinViewer &self, py::array_t<unsigned char> &img) {
+        .def("add_image_1", [=](PangolinViewer &self, py::array_t<unsigned char> &img) {
             py::buffer_info buf = img.request();
             cv::Mat mat(static_cast<int>(buf.shape[0]), static_cast<int>(buf.shape[1]), CV_8UC3, buf.ptr);
             self.add_image_1(mat);
@@ -406,7 +406,7 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         .def("add_image_1", static_cast<void (PangolinViewer::*)(const std::string&)>(&PangolinViewer::add_image_1), 
              py::arg("image_path")) // Bind the string path version
              
-        .def("add_image_2", [](PangolinViewer &self, py::array_t<unsigned char> &img) {
+        .def("add_image_2", [=](PangolinViewer &self, py::array_t<unsigned char> &img) {
             py::buffer_info buf = img.request();
             cv::Mat mat(static_cast<int>(buf.shape[0]), static_cast<int>(buf.shape[1]), CV_8UC3, buf.ptr);
             self.add_image_2(mat);
@@ -414,9 +414,9 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         .def("add_image_2", static_cast<void (PangolinViewer::*)(const std::string&)>(&PangolinViewer::add_image_2), 
              py::arg("image_path")) // Bind the string path version
 
-		.def("get_algorithm_wait_flag", &PangolinViewer::get_algorithm_wait_flag)
+		.def("is_step_mode_active", &PangolinViewer::is_step_mode_active)
 		.def("set_visualize_opencv_mat", &PangolinViewer::set_visualize_opencv_mat)
-		.def("algorithm_wait", &PangolinViewer::algorithm_wait)
+		.def("wait_for_step", &PangolinViewer::wait_for_step)
 		.def("notify_algorithm", &PangolinViewer::notify_algorithm)
 		;
 }

@@ -1,5 +1,7 @@
 #include <unistd.h>
 #include "PangolinViewer.h"
+#include <thread>
+#include <chrono>
 
 struct PangolinViewer::RuntimeInfo {
     pangolin::GlTexture tex_track;
@@ -30,7 +32,7 @@ struct PangolinViewer::RuntimeInfo {
     pangolin::Var<bool>* pb_show_est_vel { new pangolin::Var<bool>("ui.show_est_vel",false, true) };
     pangolin::Var<bool>* pb_show_est_extrin_trans { new pangolin::Var<bool>("ui.show_est_ex_t", false, true) };
 
-    pangolin::Var<bool>* pb_step_by_step { new pangolin::Var<bool>("ui.Step by Step", false, false) };
+    pangolin::Var<bool>* pb_step_mode { new pangolin::Var<bool>("ui.Step by Step", false, false) };
     pangolin::Var<bool>* pb_start_algorithm { new pangolin::Var<bool>("ui.Start Button", false, false) };
 };
 
@@ -41,7 +43,7 @@ PangolinViewer::PangolinViewer(int w, int h, bool start_run_thread)
 	running = true;
     need_reset = false;
 
-    algorithm_wait_flag = false;
+    step_mode_active = false;
     visualize_opencv_mat = false;
 
     cur_t_wc.setZero();
@@ -164,7 +166,7 @@ void PangolinViewer::reset_internal()
 
     need_reset = false;
 
-    algorithm_wait_flag = false;
+    step_mode_active = false;
     visualize_opencv_mat = false;
 }
 
@@ -275,14 +277,14 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
 
     std::unique_lock<std::mutex> lk3d(mutex_3D_show);
 
-    if(pangolin::Pushed(*mRuntimeInfo->pb_step_by_step)) {
+    if(pangolin::Pushed(*mRuntimeInfo->pb_step_mode)) {
         notify_algorithm();
-        set_algorithm_wait_flag(true);
+        set_step_mode_active(true);
     }
 
     if(pangolin::Pushed(*mRuntimeInfo->pb_start_algorithm)) {
         notify_algorithm();
-        set_algorithm_wait_flag(false);
+        set_step_mode_active(false);
     }
 
     // --- 视图控制逻辑 --- 
@@ -469,28 +471,15 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
         mRuntimeInfo->plotter_ba->AddMarker(pangolin::Marker::Vertical, cur_t, pangolin::Marker::Equal, pangolin::Colour::White());
     }
 
-    //usleep(5000);
-    // control step and step debug, stupid implementation 
-    // should improved with keyboard response thread
-    // cv::Mat response_img = cv::Mat::zeros(100, 100, CV_8UC1);
-    // cv::imshow("keyboard response", response_img);
-    // if(plane_detection_img.empty()) {
-    //     plane_detection_img = cv::Mat::zeros(track_img.rows, track_img.cols, CV_8UC1);
-    // }
-    // cv::imshow("plane_detection_img", plane_detection_img);
-    // char c = cv::waitKey(2);
-    // if(c == 'w' || c == 'W') {
-    //     set_algorithm_wait_flag(false);
-    //     notify_algorithm();
-    // }
-    // else if( c == 'q' || c == 'Q') {
-    //     set_algorithm_wait_flag(true);
-    //     notify_algorithm();
-    // }
-        
     // Swap frames and Process Events
     pangolin::FinishFrame();
     if(need_reset) reset_internal();
+
+    // 添加延迟
+    if (delay_time_in_s > 0.0f) {
+        auto duration = std::chrono::microseconds(static_cast<long long>(delay_time_in_s * 1000000.0f));
+        std::this_thread::sleep_for(duration);
+    }
 }
 
 bool PangolinViewer::extern_should_not_quit() {

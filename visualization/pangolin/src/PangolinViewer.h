@@ -206,10 +206,11 @@ public:
   // 添加图像到第二个视图 (可传入文件路径)
   void add_image_2(const std::string& image_path);
 
-  bool get_algorithm_wait_flag() const { return algorithm_wait_flag; }
+  // ===== 修改后的步进控制API =====
+  bool is_step_mode_active() const { return step_mode_active; }
   void set_visualize_opencv_mat() { visualize_opencv_mat = true; }
 
-  void algorithm_wait() {
+  void wait_for_step() {
     std::unique_lock<std::mutex> lk(m);
     cv.wait(lk);
   }
@@ -219,7 +220,7 @@ public:
 private:
   bool need_reset;
   void reset_internal();
-  void set_algorithm_wait_flag(bool flag) { algorithm_wait_flag = flag; }
+  void set_step_mode_active(bool flag) { step_mode_active = flag; }
 
   // 从颜色名称解析为RGB值
   Eigen::Vector3f parse_color_name(const std::string& color_name);
@@ -231,7 +232,7 @@ private:
   int w, h;
   int track_img_width, track_img_height;
 
-  bool algorithm_wait_flag;
+  bool step_mode_active;
   bool visualize_opencv_mat;
 
   std::mutex m;

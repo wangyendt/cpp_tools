@@ -286,10 +286,7 @@ if __name__ == "__main__":
         viewer.add_image_2(img=img_copy)
         
         # 8. 渲染一帧
-        viewer.show(delay_time_in_s=0.0)
-        time.sleep(0.03)
+        viewer.show(delay_time_in_s=0.03)
 
     # 清理测试图像文件
     # 以下代码已移除，test_img_path变量未定义
-#
-#
