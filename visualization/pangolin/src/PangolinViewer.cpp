@@ -23,7 +23,7 @@ struct PangolinViewer::RuntimeInfo {
     pangolin::Var<bool>* pb_show_cameras { new pangolin::Var<bool>("ui.Show Cameras", true, true) };
     pangolin::Var<bool>* pb_show_planes { new pangolin::Var<bool>("ui.Show Planes", true, true) };
     pangolin::Var<bool>* pb_show_lines { new pangolin::Var<bool>("ui.Show Lines", true, true) };
-    
+
     pangolin::Var<bool>* pb_show_est_bg { new pangolin::Var<bool>("ui.show_est_bg", true, true) };
     pangolin::Var<bool>* pb_show_est_ba { new pangolin::Var<bool>("ui.show_est_ba", true, true) };
     pangolin::Var<bool>* pb_show_est_timeoffset { new pangolin::Var<bool>("ui.show_est_dt", false, true) };
@@ -418,7 +418,7 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
         this->b_show_cameras = (*mRuntimeInfo->pb_show_cameras).Get();
         this->b_show_planes = (*mRuntimeInfo->pb_show_planes).Get();
         this->b_show_lines = (*mRuntimeInfo->pb_show_lines).Get();
-        
+
         this->b_show_est_bg = (*mRuntimeInfo->pb_show_est_bg).Get();
         this->b_show_est_ba = (*mRuntimeInfo->pb_show_est_ba).Get();
         this->b_show_est_dt = (*mRuntimeInfo->pb_show_est_timeoffset).Get();
@@ -1051,13 +1051,16 @@ void PangolinViewer::draw_all_planes() {
 void PangolinViewer::draw_all_lines() {
     std::unique_lock<std::mutex> lock(mutex_lines);
     glPushAttrib(GL_LINE_BIT | GL_ENABLE_BIT); // 保存当前线宽和启用状态
-    glBegin(GL_LINES);
+    
+    // 为每条线单独设置线宽和绘制
     for (const auto& line : frame_lines) {
-        glLineWidth(line.line_width);
+        glLineWidth(line.line_width); // 在 glBegin 之前设置线宽
+        glBegin(GL_LINES);
         glColor3fv(line.color.data());
         glVertex3fv(line.start_point.data());
         glVertex3fv(line.end_point.data());
+        glEnd();
     }
-    glEnd();
+    
     glPopAttrib(); // 恢复之前保存的线宽和启用状态
 }
