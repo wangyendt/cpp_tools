@@ -20,6 +20,8 @@ struct PangolinViewer::RuntimeInfo {
 
     pangolin::Var<bool>* pb_show_traj { new pangolin::Var<bool>("ui.Show Trajectory", true, true) };
     pangolin::Var<bool>* pb_show_points { new pangolin::Var<bool>("ui.Show 3D Points", true, true) };
+    pangolin::Var<bool>* pb_show_cameras { new pangolin::Var<bool>("ui.Show Cameras", true, true) };
+    
     pangolin::Var<bool>* pb_show_est_bg { new pangolin::Var<bool>("ui.show_est_bg", true, true) };
     pangolin::Var<bool>* pb_show_est_ba { new pangolin::Var<bool>("ui.show_est_ba", true, true) };
     pangolin::Var<bool>* pb_show_est_timeoffset { new pangolin::Var<bool>("ui.show_est_dt", false, true) };
@@ -344,19 +346,25 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
     // 绘制主相机（来自 publish_traj）
     if(b_show_trajectory) {
         draw_trajectory(vio_traj, Eigen::Vector3f(0.0f, 1.0f, 0.0f));
-        draw_current_camera(cur_t_wc, cur_r_wc); // 总是绘制 publish_traj 的当前相机
+        if(b_show_cameras) {
+            draw_current_camera(cur_t_wc, cur_r_wc);
+        }
     }
     
-    // 绘制额外添加的独立相机
-    draw_all_cameras();
+    // 绘制额外添加的独立相机，同样受b_show_cameras控制
+    if(b_show_cameras) {
+        draw_all_cameras();
+    }
 
     if(b_show_3D_points) {
         // 绘制单帧点云
         draw_all_point_clouds();
     }
     
-    // 绘制所有额外轨迹
-    draw_all_trajectories();
+    // 绘制所有额外轨迹，同样受b_show_trajectory控制
+    if(b_show_trajectory) {
+        draw_all_trajectories();
+    }
 
     lk3d.unlock();
 
@@ -386,7 +394,7 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
         this->b_follow_camera = (*mRuntimeInfo->pb_follow_camera).Get();
         this->b_show_3D_points = (*mRuntimeInfo->pb_show_points).Get();
         this->b_show_trajectory = (*mRuntimeInfo->pb_show_traj).Get();
-        // 移除不再使用的UI状态更新
+        this->b_show_cameras = (*mRuntimeInfo->pb_show_cameras).Get();
         
         this->b_show_est_bg = (*mRuntimeInfo->pb_show_est_bg).Get();
         this->b_show_est_ba = (*mRuntimeInfo->pb_show_est_ba).Get();
@@ -745,7 +753,10 @@ void PangolinViewer::draw_trajectory_line(const Trajectory& trajectory) {
 }
 
 void PangolinViewer::draw_trajectory_cameras(const Trajectory& trajectory) {
-    if (!trajectory.show_cameras || trajectory.camera_size <= 0) return;
+    // 轨迹上的相机模型显示受两个条件控制：
+    // 1. trajectory.show_cameras (由add_trajectory_*函数参数决定)
+    // 2. b_show_cameras (UI控件)
+    if (!trajectory.show_cameras || trajectory.camera_size <= 0 || !b_show_cameras) return;
     
     Eigen::Vector4f color_rgba(trajectory.color.x(), trajectory.color.y(), trajectory.color.z(), 1.0f);
     for (const auto& pose : trajectory.poses) {

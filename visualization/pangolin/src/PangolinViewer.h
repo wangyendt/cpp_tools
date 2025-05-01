@@ -236,6 +236,7 @@ private:
   // render settings
   bool b_show_trajectory = true;
   bool b_show_3D_points = true;
+  bool b_show_cameras = true;
   bool b_follow_camera = true;
   bool b_camera_view = true;
   bool b_show_est_bg = true;
