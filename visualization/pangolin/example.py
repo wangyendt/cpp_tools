@@ -261,6 +261,6 @@ if __name__ == "__main__":
         time.sleep(0.03)
 
     # 清理测试图像文件
-    if os.path.exists(test_img_path):
-        os.remove(test_img_path)
-        print(f"测试图像文件已删除: {test_img_path}")
+    # 以下代码已移除，test_img_path变量未定义
+#
+#

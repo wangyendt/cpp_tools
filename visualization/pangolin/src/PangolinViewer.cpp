@@ -20,11 +20,6 @@ struct PangolinViewer::RuntimeInfo {
 
     pangolin::Var<bool>* pb_show_traj { new pangolin::Var<bool>("ui.Show Trajectory", true, true) };
     pangolin::Var<bool>* pb_show_points { new pangolin::Var<bool>("ui.Show 3D Points", true, true) };
-    pangolin::Var<bool>* pb_show_history_points { new pangolin::Var<bool>("ui.Show History 3D", true, true) };
-    pangolin::Var<bool>* pb_show_history_plane_tri_points { new pangolin::Var<bool>("ui.Show Plane tri 3D", true, true) };
-    pangolin::Var<bool>* pb_show_history_plane_vio_stable_points { new pangolin::Var<bool>("ui.Show Plane vio 3D", true, true) };
-    pangolin::Var<bool>* pb_show_plane { new pangolin::Var<bool>("ui.Show Plane", true, true) };
-
     pangolin::Var<bool>* pb_show_est_bg { new pangolin::Var<bool>("ui.show_est_bg", true, true) };
     pangolin::Var<bool>* pb_show_est_ba { new pangolin::Var<bool>("ui.show_est_ba", true, true) };
     pangolin::Var<bool>* pb_show_est_timeoffset { new pangolin::Var<bool>("ui.show_est_dt", false, true) };
@@ -48,14 +43,8 @@ PangolinViewer::PangolinViewer(int w, int h, bool start_run_thread)
     cur_t_wc.setZero();
     cur_r_wc.setIdentity();
 
-    cur_t_wc_gt.setZero();
-    cur_r_wc_gt.setIdentity();
-
+    // 移除不再使用的变量初始化
     vio_traj.clear();
-    cur_slam_pts.clear();
-    cur_msckf_pts.clear();
-    his_slam_pts.clear();
-    his_plane_tri_pts.clear();
 
     vio_dt_data_log.Clear();
     vio_extrin_t_data_log.Clear();
@@ -128,11 +117,8 @@ void PangolinViewer::reset_internal()
     cur_r_wc.setIdentity();
 
     vio_traj.clear();
-    cur_slam_pts.clear();
-    cur_msckf_pts.clear();
-    his_slam_pts.clear();
-    his_plane_tri_pts.clear();
-
+    // 移除不需要的点云数据清除代码
+    
     // 清空点云数据
     {
         std::unique_lock<std::mutex> lock(mutex_point_clouds);
@@ -358,36 +344,17 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
     // 绘制主相机（来自 publish_traj）
     if(b_show_trajectory) {
         draw_trajectory(vio_traj, Eigen::Vector3f(0.0f, 1.0f, 0.0f));
-        draw_trajectory_gt(traj_gt, Eigen::Vector3f(1.0f, 0.0f, 0.0f));
         draw_current_camera(cur_t_wc, cur_r_wc); // 总是绘制 publish_traj 的当前相机
-        draw_current_camera(cur_t_wc_gt, cur_r_wc_gt); // 绘制真值相机
     }
     
     // 绘制额外添加的独立相机
     draw_all_cameras();
 
     if(b_show_3D_points) {
-        // 绘制原始点
-        draw_3D_points(cur_slam_pts, Eigen::Vector3f(1.0f, 0.0f, 0.0f), 8);
-        draw_3D_points(cur_msckf_pts, Eigen::Vector3f(0.0f, 0.0f, 1.0f), 8);
-        
         // 绘制单帧点云
         draw_all_point_clouds();
     }
-    if(b_show_history_points) {
-        draw_history_3D_points(Eigen::Vector3f(0.5f, 0.5f, 0.5f), 4);
-    }
-    if(b_show_plane_tri_points) {
-        draw_plane_history_tri_points(Eigen::Vector3f(1.0f, 0.5f, 0.0f), 4);
-    }
-    if(b_show_plane_vio_stable_points) {
-        draw_plane_history_vio_stable_points(Eigen::Vector3f(0.0f, 0.0f, 1.0f), 4);
-    }
-    if(b_show_plane) {
-        draw_history_plane_horizontal();
-        draw_history_plane_vertical();
-    }
-
+    
     // 绘制所有额外轨迹
     draw_all_trajectories();
 
@@ -419,11 +386,8 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
         this->b_follow_camera = (*mRuntimeInfo->pb_follow_camera).Get();
         this->b_show_3D_points = (*mRuntimeInfo->pb_show_points).Get();
         this->b_show_trajectory = (*mRuntimeInfo->pb_show_traj).Get();
-        this->b_show_history_points = (*mRuntimeInfo->pb_show_history_points).Get();
-        this->b_show_plane_tri_points = (*mRuntimeInfo->pb_show_history_plane_tri_points).Get();
-        this->b_show_plane_vio_stable_points = (*mRuntimeInfo->pb_show_history_plane_vio_stable_points).Get();
-        this->b_show_plane = (*mRuntimeInfo->pb_show_plane).Get();
-
+        // 移除不再使用的UI状态更新
+        
         this->b_show_est_bg = (*mRuntimeInfo->pb_show_est_bg).Get();
         this->b_show_est_ba = (*mRuntimeInfo->pb_show_est_ba).Get();
         this->b_show_est_dt = (*mRuntimeInfo->pb_show_est_timeoffset).Get();
@@ -502,176 +466,6 @@ bool PangolinViewer::extern_should_not_quit() {
     return !pangolin::ShouldQuit() && running;
 }
 
-// main publish function =============================
-void PangolinViewer::publish_traj(Eigen::Quaternionf& q_wc, Eigen::Vector3f& t_wc)
-{
-    if(!b_show_trajectory) return;
-    std::unique_lock<std::mutex> lk(mutex_3D_show);
-    cur_t_wc = t_wc;
-    cur_r_wc = q_wc;
-    vio_traj.push_back(t_wc);
-    return;
-}
-
-void PangolinViewer::publish_3D_points(std::vector<Eigen::Vector3f>& slam_pts, std::vector<Eigen::Vector3f>& msckf_pts)
-{
-    if(!b_show_3D_points) return;
-    std::unique_lock<std::mutex> lk(mutex_3D_show);
-    cur_slam_pts = slam_pts;
-    cur_msckf_pts = msckf_pts;
-    return;
-}
-
-void PangolinViewer::publish_3D_points(std::map<size_t, Eigen::Vector3f>& slam_pts, std::vector<Eigen::Vector3f>& msckf_pts) 
-{
-    if(!b_show_3D_points) return;
-    std::unique_lock<std::mutex> lk(mutex_3D_show);
-    cur_msckf_pts = msckf_pts;
-
-    cur_slam_pts.clear();
-    for(auto& elem : slam_pts) {
-        cur_slam_pts.push_back(elem.second);
-        size_t feat_id = elem.first;
-        if(his_slam_pts.find(feat_id) != his_slam_pts.end()) {
-            continue;
-        } else {
-            his_slam_pts[feat_id] = elem.second;
-        }
-    }
-    return;
-}
-
-void PangolinViewer::add_image_1(const cv::Mat& img_raw)
-{
-    if (!mRuntimeInfo || !mRuntimeInfo->track_result) return; // 检查视图是否已初始化
-    
-    std::unique_lock<std::mutex> lk(mutex_img);
-    // 缩放和填充图像
-    cv::Mat processed_img = resize_and_pad_image(img_raw, track_img_width, track_img_height);
-    track_img = processed_img; // 存储处理后的图像
-    track_img_changed = true;
-}
-
-void PangolinViewer::add_image_1(const std::string& image_path)
-{
-    cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
-    if(img.empty()) {
-        std::cerr << "Error: Could not load image from path: " << image_path << std::endl;
-        // 可以选择添加一个默认的错误图像
-        cv::Mat error_img = cv::Mat::zeros(track_img_height, track_img_width, CV_8UC3);
-        cv::putText(error_img, "Load Error", cv::Point(10, track_img_height / 2), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0,0,255), 1);
-        add_image_1(error_img);
-        return;
-    }
-    add_image_1(img);
-}
-
-void PangolinViewer::add_image_2(const cv::Mat& img_raw)
-{
-    if (!mRuntimeInfo || !mRuntimeInfo->plane_detection_result) return; // 检查视图是否已初始化
-    
-    std::unique_lock<std::mutex> lk(mutex_plane_img);
-    // 缩放和填充图像 (假设第二个视图也使用track_img_width/height, 如果不同需要修改)
-    cv::Mat processed_img = resize_and_pad_image(img_raw, track_img_width, track_img_height);
-    plane_detection_img = processed_img; // 存储处理后的图像
-    plane_detection_img_changed = true;
-}
-
-void PangolinViewer::add_image_2(const std::string& image_path)
-{
-    cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
-     if(img.empty()) {
-        std::cerr << "Error: Could not load image from path: " << image_path << std::endl;
-        cv::Mat error_img = cv::Mat::zeros(track_img_height, track_img_width, CV_8UC3);
-        cv::putText(error_img, "Load Error", cv::Point(10, track_img_height / 2), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0,0,255), 1);
-        add_image_2(error_img);
-        return;
-    }
-    add_image_2(img);
-}
-
-void PangolinViewer::publish_plane_triangulate_pts(std::map<size_t, Eigen::Vector3f>& plane_tri_pts) {
-    if(!b_show_plane_tri_points) return;
-    std::unique_lock<std::mutex> lk(mutex_3D_show);
-
-    for(auto& pair : plane_tri_pts) {
-        his_plane_tri_pts[pair.first] = pair.second;
-    }
-    return;
-}
-
-void PangolinViewer::publish_plane_vio_stable_pts(std::map<size_t, Eigen::Vector3f>& plane_vio_pts) {
-    if(!b_show_plane_vio_stable_points) return;
-    std::unique_lock<std::mutex> lk(mutex_3D_show);
-    for(auto& pair: plane_vio_pts) {
-        his_plane_vio_stable_pts[pair.first] = pair.second;
-    }
-    return;
-}
-
-void PangolinViewer::publish_planes_horizontal(std::map<size_t, std::vector<Eigen::Vector3f>>& planes) {
-    if(!b_show_plane) return;
-    std::unique_lock<std::mutex> lk(mutex_3D_show);
-
-    for(auto& pair : planes) {
-       // his_planes_horizontal[pair.first].emplace_back(pair.second);
-       his_planes_horizontal[pair.first] = pair.second;
-    }
-    return;
-}
-
-void PangolinViewer::publish_planes_vertical(std::map<size_t, std::vector<Eigen::Vector3f>>& planes) {
-    if(!b_show_plane) return;
-    std::unique_lock<std::mutex> lk(mutex_3D_show);
-
-    for(auto& pair : planes) {
-        his_planes_vertical[pair.first].emplace_back(pair.second);
-    }
-    return;
-}
-
-// the order is timestamp, timesoffset, extrin_trans, velocity, bg, ba 
-//              (0), (1), (2, 3, 4), (5, 6, 7), (8, 9, 10), (11, 12 ,13)
-void PangolinViewer::publish_vio_opt_data(std::vector<float> vals)
-{
-    // vio_opt_data_log.Log(vals);
-    cur_t = vals.at(0);
-    std::vector<float> dt_vals;
-    dt_vals.push_back(cur_t); 
-    dt_vals.push_back(vals.at(1));
-    vio_dt_data_log.Log(dt_vals);
-
-    std::vector<float> extrin_t_vals;
-    extrin_t_vals.push_back(cur_t); 
-    extrin_t_vals.push_back(vals.at(2));
-    extrin_t_vals.push_back(vals.at(3));
-    extrin_t_vals.push_back(vals.at(4));
-    vio_extrin_t_data_log.Log(extrin_t_vals);
-
-    std::vector<float> vel_vals;
-    vel_vals.push_back(cur_t); 
-    vel_vals.push_back(vals.at(5));
-    vel_vals.push_back(vals.at(6));
-    vel_vals.push_back(vals.at(7));
-    vio_vel_data_log.Log(vel_vals);
-
-    std::vector<float> bg_vals;
-    bg_vals.push_back(cur_t); 
-    bg_vals.push_back(vals.at(8));
-    bg_vals.push_back(vals.at(9));
-    bg_vals.push_back(vals.at(10));
-    vio_bg_data_log.Log(bg_vals);
-
-    std::vector<float> ba_vals;
-    ba_vals.push_back(cur_t); 
-    ba_vals.push_back(vals.at(11));
-    ba_vals.push_back(vals.at(12));
-    ba_vals.push_back(vals.at(13));
-    vio_ba_data_log.Log(ba_vals);
-
-    return;
-}
-
 // some helper function ===============================
 void PangolinViewer::draw_current_camera(
         const Eigen::Vector3f &p,
@@ -734,11 +528,12 @@ void PangolinViewer::draw_3D_points(
 
 void PangolinViewer::draw_history_3D_points(Eigen::Vector3f color, float pt_size)
 {
-    std::vector<Eigen::Vector3f> all_history_points;
-    for(auto& elem : his_slam_pts) {
-        all_history_points.push_back(elem.second);
-    }
-    draw_3D_points(all_history_points, color, pt_size);
+    // 此函数已被新的点云API替代，不再使用SLAM特定变量
+    // 对于历史点云，请使用add_points()添加需要保留的点云
+    
+    // 为向后兼容保留一个空实现
+    std::vector<Eigen::Vector3f> empty_points;
+    draw_3D_points(empty_points, color, pt_size);
     return;
 }
 
@@ -780,109 +575,6 @@ void PangolinViewer::follow_camera(const Eigen::Vector3f &p, const Eigen::Quater
     M.m[15] = 1.0;
 }
 
-void PangolinViewer::draw_plane_history_tri_points(Eigen::Vector3f color, float pt_size) {
-    std::vector<Eigen::Vector3f> all_history_plane_tri_points;
-    for(auto& elem : his_plane_tri_pts) {
-        all_history_plane_tri_points.push_back(elem.second);
-    }
-    draw_3D_points(all_history_plane_tri_points, color, pt_size);
-    return;
-}
-
-void PangolinViewer::draw_plane_history_vio_stable_points(Eigen::Vector3f color, float pt_size) {
-    std::vector<Eigen::Vector3f> all_history_plane_vio_stable_points;
-    for(auto& elem : his_plane_vio_stable_pts) {
-        all_history_plane_vio_stable_points.push_back(elem.second);
-    }
-    draw_3D_points(all_history_plane_vio_stable_points, color, pt_size);
-    return;
-}
-
-void PangolinViewer::draw_history_plane_horizontal() {
-    
-    std::vector<Eigen::Vector3f> corner_pts;
-    
-    for(auto& plane : his_planes_horizontal) {
-        size_t plane_id = plane.first;
-        auto& history_polygan = plane.second;
-
-        // float b = ((plane_id * 10) % 255 ) / (float)(255.0f);
-        // float g = ((plane_id * 100) % 255 ) / (float)(255.0f);
-        // float r = ((plane_id * 1) % 255 ) / (float)(255.0f);
-
-        float b = 0.75f;  //0
-        float g = 0.75f;  //1
-        float r = 0.75f;  //0
-        //float alpha = 0.2f; 
-
-        //for(auto& one_plane : history_polygan) {
-            corner_pts = history_polygan;
-            size_t num_pts = corner_pts.size();
-            std::vector<float> color, points;
-            color.resize(3 * num_pts);
-            points.resize(3 * num_pts);
-            for(size_t i = 0; i < num_pts; i++) {
-                color.at(i*3) = b;
-                color.at(i*3 + 1) = g;
-                color.at(i*3 + 2) = r;
-                //color.at(i*3 + 3) = alpha;
-
-                points.at(i*3) = corner_pts.at(i)(0);
-                points.at(i*3 + 1) = corner_pts.at(i)(1);
-                points.at(i*3 + 2) = corner_pts.at(i)(2);
-            }
-            pangolin::glDrawColoredVertices<float,float>(num_pts, &points[0], &color[0], GL_POLYGON, 3, 3);
-        //}
-    }
-
-    return;
-}
-
-void PangolinViewer::draw_history_plane_vertical() {
-    
-    std::vector<Eigen::Vector3f> corner_pts;
-    
-    for(auto& plane : his_planes_vertical) {
-        size_t plane_id = plane.first;
-        auto& history_polygan = plane.second;
-
-        // float b = ((plane_id * 10) % 255 ) / (float)(255.0f);
-        // float g = ((plane_id * 5) % 255 ) / (float)(255.0f);
-        // float r = ((plane_id * 15) % 255 ) / (float)(255.0f);
-
-        float b = 1.0f;
-        float g = 0.0f;
-        float r = 0.0f;
-
-        for(auto& one_plane : history_polygan) {
-            corner_pts = one_plane;
-            size_t num_pts = corner_pts.size();
-            std::vector<float> color, points;
-            color.resize(3 * num_pts);
-            points.resize(3 * num_pts);
-            for(size_t i = 0; i < num_pts; i++) {
-                color.at(i*3) = b;
-                color.at(i*3 + 1) = g;
-                color.at(i*3 + 2) = r;
-
-                points.at(i*3) = corner_pts.at(i)(0);
-                points.at(i*3 + 1) = corner_pts.at(i)(1);
-                points.at(i*3 + 2) = corner_pts.at(i)(2);
-            }
-            pangolin::glDrawColoredVertices<float,float>(num_pts, &points[0], &color[0], GL_POLYGON, 3, 3);
-        }
-    }
-
-    return;
-}
-void PangolinViewer::publish_traj_gt(Eigen::Quaternionf& q_wc, Eigen::Vector3f& t_wc) {
-    if(!b_show_trajectory) return;
-    std::unique_lock<std::mutex> lk(mutex_3D_show);
-    cur_t_wc_gt = t_wc;
-    cur_r_wc_gt = q_wc;
-    traj_gt.push_back(t_wc);
-    return;
-}
 void PangolinViewer::draw_trajectory_gt(const std::vector<Eigen::Vector3f> &traj, Eigen::Vector3f color) {
     glBegin(GL_LINE_STRIP);
     glColor3fv(color.data());
@@ -1137,9 +829,33 @@ void PangolinViewer::draw_all_cameras() {
     glLineWidth(1.0f); // 恢复默认线宽
 }
 
-// ===== 修改后的图像 API 实现 =====
+// ===== 图像API实现 =====
+void PangolinViewer::add_image_1(const cv::Mat &img) {
+    if (img.empty()) return;
+    
+    std::unique_lock<std::mutex> lock(mutex_img);
+    track_img = resize_and_pad_image(img, track_img_width, track_img_height);
+    track_img_changed = true;
+}
 
-// 内部辅助函数：缩放和填充图像以适应视图
+void PangolinViewer::add_image_1(const std::string& image_path) {
+    cv::Mat img = cv::imread(image_path);
+    add_image_1(img);
+}
+
+void PangolinViewer::add_image_2(const cv::Mat &img) {
+    if (img.empty()) return;
+    
+    std::unique_lock<std::mutex> lock(mutex_plane_img);
+    plane_detection_img = resize_and_pad_image(img, track_img_width, track_img_height);
+    plane_detection_img_changed = true;
+}
+
+void PangolinViewer::add_image_2(const std::string& image_path) {
+    cv::Mat img = cv::imread(image_path);
+    add_image_2(img);
+}
+
 cv::Mat PangolinViewer::resize_and_pad_image(const cv::Mat& img_in, int view_w, int view_h) {
     if (img_in.empty() || view_w <= 0 || view_h <= 0) {
         return cv::Mat::zeros(view_h, view_w, CV_8UC3); // 返回黑色图像
@@ -1151,7 +867,6 @@ cv::Mat PangolinViewer::resize_and_pad_image(const cv::Mat& img_in, int view_w, 
     float view_aspect = (float)view_w / view_h;
 
     int new_w, new_h;
-    float resize_scale;
 
     // 优先匹配宽度原则
     float required_height = static_cast<float>(view_w) / img_aspect;

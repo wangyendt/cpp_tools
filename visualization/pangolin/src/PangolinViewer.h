@@ -154,13 +154,6 @@ public:
                                 const std::string& label = "",
                                 float point_size = 4.0f,
                                 float line_width = 1.0f);
-
-  // 原有API (保持兼容性)
-  void publish_traj(Eigen::Quaternionf &q_wc, Eigen::Vector3f &t_wc);
-  void publish_3D_points(std::vector<Eigen::Vector3f> &slam_pts,
-                         std::vector<Eigen::Vector3f> &msckf_pts);
-  void publish_3D_points(std::map<size_t, Eigen::Vector3f> &slam_pts,
-                         std::vector<Eigen::Vector3f> &msckf_pts);
                          
   // ===== 修改后的图像API =====
   // 添加图像到第一个视图 (可传入cv::Mat)
@@ -172,19 +165,6 @@ public:
   void add_image_2(const cv::Mat &img);
   // 添加图像到第二个视图 (可传入文件路径)
   void add_image_2(const std::string& image_path);
-  
-  // the order is timestamp, timesoffset, extrin_trans, velocity, bg, ba
-  //              (0), (1), (2, 3, 4), (5, 6, 7), (8, 9, 10), (11, 12 ,13)
-  void publish_vio_opt_data(std::vector<float> vals);
-  void publish_plane_triangulate_pts(
-      std::map<size_t, Eigen::Vector3f> &plane_tri_pts);
-  void publish_plane_vio_stable_pts(
-      std::map<size_t, Eigen::Vector3f> &plane_tri_pts);
-  void publish_planes_horizontal(
-      std::map<size_t, std::vector<Eigen::Vector3f>> &planes);
-  void publish_planes_vertical(
-      std::map<size_t, std::vector<Eigen::Vector3f>> &planes);
-  void publish_traj_gt(Eigen::Quaternionf &q_wc, Eigen::Vector3f &t_wc);
 
   bool get_algorithm_wait_flag() const { return algorithm_wait_flag; }
   void set_visualize_opencv_mat() { visualize_opencv_mat = true; }
@@ -240,18 +220,6 @@ private:
   Eigen::Quaternionf cur_r_wc;
   std::vector<Eigen::Vector3f> vio_traj;
 
-  std::vector<Eigen::Vector3f> cur_slam_pts;
-  std::vector<Eigen::Vector3f> cur_msckf_pts;
-  std::map<size_t, Eigen::Vector3f> his_slam_pts;
-  std::map<size_t, Eigen::Vector3f> his_plane_tri_pts;
-  std::map<size_t, Eigen::Vector3f> his_plane_vio_stable_pts;
-  std::map<size_t, std::vector<Eigen::Vector3f>> his_planes_horizontal;
-  std::map<size_t, std::vector<std::vector<Eigen::Vector3f>>>
-      his_planes_vertical;
-  Eigen::Vector3f cur_t_wc_gt;
-  Eigen::Quaternionf cur_r_wc_gt;
-  std::vector<Eigen::Vector3f> traj_gt;
-
   pangolin::DataLog vio_dt_data_log, vio_extrin_t_data_log, vio_vel_data_log,
       vio_bg_data_log, vio_ba_data_log;
   double start_t, cur_t;
@@ -268,13 +236,8 @@ private:
   // render settings
   bool b_show_trajectory = true;
   bool b_show_3D_points = true;
-  bool b_show_history_points = true;
   bool b_follow_camera = true;
   bool b_camera_view = true;
-  bool b_show_plane_tri_points = true;
-  bool b_show_plane_vio_stable_points = true;
-  bool b_show_plane = true;
-
   bool b_show_est_bg = true;
   bool b_show_est_ba = true;
   bool b_show_est_dt = false;
@@ -309,11 +272,6 @@ private:
   void draw_trajectory_cameras(const Trajectory& trajectory);
   void draw_all_trajectories(); // 在渲染循环中调用
 
-  void draw_plane_history_tri_points(Eigen::Vector3f color, float pt_size);
-  void draw_plane_history_vio_stable_points(Eigen::Vector3f color,
-                                            float pt_size);
-  void draw_history_plane_horizontal();
-  void draw_history_plane_vertical();
   void draw_trajectory_gt(const std::vector<Eigen::Vector3f> &traj,
                           Eigen::Vector3f color = Eigen::Vector3f(1.0f, 0.0f, 0.0f));
 
