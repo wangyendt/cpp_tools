@@ -21,6 +21,8 @@ struct PangolinViewer::RuntimeInfo {
     pangolin::Var<bool>* pb_show_traj { new pangolin::Var<bool>("ui.Show Trajectory", true, true) };
     pangolin::Var<bool>* pb_show_points { new pangolin::Var<bool>("ui.Show 3D Points", true, true) };
     pangolin::Var<bool>* pb_show_cameras { new pangolin::Var<bool>("ui.Show Cameras", true, true) };
+    pangolin::Var<bool>* pb_show_planes { new pangolin::Var<bool>("ui.Show Planes", true, true) };
+    pangolin::Var<bool>* pb_show_lines { new pangolin::Var<bool>("ui.Show Lines", true, true) };
     
     pangolin::Var<bool>* pb_show_est_bg { new pangolin::Var<bool>("ui.show_est_bg", true, true) };
     pangolin::Var<bool>* pb_show_est_ba { new pangolin::Var<bool>("ui.show_est_ba", true, true) };
@@ -137,6 +139,15 @@ void PangolinViewer::reset_internal()
         frame_cameras.clear();
         next_camera_id = 0;
         main_camera_id = std::nullopt;
+    }
+    // 新增：清空平面和直线数据
+    {
+        std::unique_lock<std::mutex> lock(mutex_planes);
+        frame_planes.clear();
+    }
+    {
+        std::unique_lock<std::mutex> lock(mutex_lines);
+        frame_lines.clear();
     }
 
     vio_dt_data_log.Clear();
@@ -366,6 +377,16 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
         draw_all_trajectories();
     }
 
+    // 新增：绘制所有平面，受b_show_planes控制
+    if(b_show_planes) {
+        draw_all_planes();
+    }
+    
+    // 新增：绘制所有直线，受b_show_lines控制
+    if(b_show_lines) {
+        draw_all_lines();
+    }
+
     lk3d.unlock();
 
     mutex_img.lock();
@@ -395,6 +416,8 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
         this->b_show_3D_points = (*mRuntimeInfo->pb_show_points).Get();
         this->b_show_trajectory = (*mRuntimeInfo->pb_show_traj).Get();
         this->b_show_cameras = (*mRuntimeInfo->pb_show_cameras).Get();
+        this->b_show_planes = (*mRuntimeInfo->pb_show_planes).Get();
+        this->b_show_lines = (*mRuntimeInfo->pb_show_lines).Get();
         
         this->b_show_est_bg = (*mRuntimeInfo->pb_show_est_bg).Get();
         this->b_show_est_ba = (*mRuntimeInfo->pb_show_est_ba).Get();
@@ -919,4 +942,122 @@ cv::Mat PangolinViewer::resize_and_pad_image(const cv::Mat& img_in, int view_w, 
     resized_img.copyTo(bg_img(roi));
 
     return bg_img;
+}
+
+// ===== 新增平面API实现 =====
+void PangolinViewer::clear_all_planes() {
+    std::unique_lock<std::mutex> lock(mutex_planes);
+    frame_planes.clear();
+}
+
+void PangolinViewer::add_plane(const std::vector<Eigen::Vector3f>& vertices,
+                             const Eigen::Vector3f& color,
+                             float alpha,
+                             const std::string& label) {
+    if (vertices.size() < 3) return; // 平面至少需要3个顶点
+    
+    std::unique_lock<std::mutex> lock(mutex_planes);
+    PlaneInstance plane;
+    plane.vertices = vertices;
+    plane.color = color;
+    plane.alpha = std::max(0.0f, std::min(alpha, 1.0f)); // 保证alpha在0-1之间
+    plane.label = label.empty() ? "plane_" + std::to_string(frame_planes.size()) : label;
+    frame_planes.push_back(std::move(plane));
+}
+
+// 新增：添加平面（通过法线、中心和尺寸）
+void PangolinViewer::add_plane(const Eigen::Vector3f& normal,
+                             const Eigen::Vector3f& center,
+                             float size, // 正方形半边长
+                             const Eigen::Vector3f& color,
+                             float alpha,
+                             const std::string& label) {
+    Eigen::Vector3f n = normal.normalized();
+    Eigen::Vector3f u, v;
+
+    // 创建一个与法线n不正交的向量tmp
+    Eigen::Vector3f tmp = (std::abs(n.x()) < 0.9f) ? Eigen::Vector3f(1,0,0) : Eigen::Vector3f(0,1,0);
+    
+    // 计算第一个基向量 u
+    u = n.cross(tmp).normalized();
+    // 计算第二个基向量 v (自动正交于n和u)
+    v = n.cross(u); // v 已经归一化，因为 n 和 u 是单位向量且正交
+
+    // 计算四个顶点
+    float s = size; // 半边长
+    std::vector<Eigen::Vector3f> vertices(4);
+    vertices[0] = center + s * u + s * v;
+    vertices[1] = center - s * u + s * v;
+    vertices[2] = center - s * u - s * v;
+    vertices[3] = center + s * u - s * v;
+
+    // 调用基于顶点的add_plane添加平面
+    add_plane(vertices, color, alpha, label);
+}
+
+// ===== 新增直线API实现 =====
+void PangolinViewer::clear_all_lines() {
+    std::unique_lock<std::mutex> lock(mutex_lines);
+    frame_lines.clear();
+}
+
+void PangolinViewer::add_line(const Eigen::Vector3f& start_point,
+                            const Eigen::Vector3f& end_point,
+                            const Eigen::Vector3f& color,
+                            float line_width,
+                            const std::string& label) {
+    std::unique_lock<std::mutex> lock(mutex_lines);
+    LineInstance line;
+    line.start_point = start_point;
+    line.end_point = end_point;
+    line.color = color;
+    line.line_width = std::max(1.0f, line_width); // 保证线宽至少为1
+    line.label = label.empty() ? "line_" + std::to_string(frame_lines.size()) : label;
+    frame_lines.push_back(std::move(line));
+}
+
+// ===== 新增平面绘制实现 =====
+void PangolinViewer::draw_all_planes() {
+    std::unique_lock<std::mutex> lock(mutex_planes);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
+    for (const auto& plane : frame_planes) {
+        size_t num_pts = plane.vertices.size();
+        if (num_pts < 3) continue;
+        
+        std::vector<float> color_rgba, points;
+        color_rgba.resize(4 * num_pts);
+        points.resize(3 * num_pts);
+        
+        for(size_t i = 0; i < num_pts; i++) {
+            color_rgba.at(i*4 + 0) = plane.color(0); // R
+            color_rgba.at(i*4 + 1) = plane.color(1); // G
+            color_rgba.at(i*4 + 2) = plane.color(2); // B
+            color_rgba.at(i*4 + 3) = plane.alpha;    // A
+
+            points.at(i*3 + 0) = plane.vertices.at(i)(0);
+            points.at(i*3 + 1) = plane.vertices.at(i)(1);
+            points.at(i*3 + 2) = plane.vertices.at(i)(2);
+        }
+        // 使用 GL_POLYGON 绘制，注意顶点顺序影响正面/反面
+        pangolin::glDrawColoredVertices<float,float>(num_pts, &points[0], &color_rgba[0], GL_POLYGON, 3, 4);
+    }
+    // 恢复默认渲染状态，避免影响其他绘制
+    glDisable(GL_BLEND);
+}
+
+// ===== 新增直线绘制实现 =====
+void PangolinViewer::draw_all_lines() {
+    std::unique_lock<std::mutex> lock(mutex_lines);
+    glPushAttrib(GL_LINE_BIT | GL_ENABLE_BIT); // 保存当前线宽和启用状态
+    glBegin(GL_LINES);
+    for (const auto& line : frame_lines) {
+        glLineWidth(line.line_width);
+        glColor3fv(line.color.data());
+        glVertex3fv(line.start_point.data());
+        glVertex3fv(line.end_point.data());
+    }
+    glEnd();
+    glPopAttrib(); // 恢复之前保存的线宽和启用状态
 }

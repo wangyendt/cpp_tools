@@ -89,6 +89,23 @@ public:
 
       // 构造函数等可以按需添加
   };
+  
+  // ===== 新增平面结构体 =====
+  struct PlaneInstance {
+      std::vector<Eigen::Vector3f> vertices;
+      Eigen::Vector3f color = Eigen::Vector3f(0.5f, 0.5f, 0.5f); // 默认灰色
+      float alpha = 0.5f; // 透明度
+      std::string label;
+  };
+  
+  // ===== 新增直线结构体 =====
+  struct LineInstance {
+      Eigen::Vector3f start_point;
+      Eigen::Vector3f end_point;
+      Eigen::Vector3f color = Eigen::Vector3f(1.0f, 1.0f, 1.0f); // 默认白色
+      float line_width = 1.0f;
+      std::string label;
+  };
 
   // ===== 新增轨迹API =====
   // 在每次渲染循环开始时清除所有额外添加的轨迹
@@ -155,6 +172,29 @@ public:
                                 float point_size = 4.0f,
                                 float line_width = 1.0f);
                          
+  // ===== 新增平面API =====
+  void clear_all_planes();
+  void add_plane(const std::vector<Eigen::Vector3f>& vertices,
+                 const Eigen::Vector3f& color = Eigen::Vector3f(0.5f, 0.5f, 0.5f),
+                 float alpha = 0.5f,
+                 const std::string& label = "");
+                 
+  // 新增：添加平面（通过法线、中心和尺寸）
+  void add_plane(const Eigen::Vector3f& normal,
+                 const Eigen::Vector3f& center,
+                 float size, // 正方形半边长
+                 const Eigen::Vector3f& color = Eigen::Vector3f(0.5f, 0.5f, 0.5f),
+                 float alpha = 0.5f,
+                 const std::string& label = "");
+                         
+  // ===== 新增直线API =====
+  void clear_all_lines();
+  void add_line(const Eigen::Vector3f& start_point,
+                const Eigen::Vector3f& end_point,
+                const Eigen::Vector3f& color = Eigen::Vector3f(1.0f, 1.0f, 1.0f),
+                float line_width = 1.0f,
+                const std::string& label = "");
+  
   // ===== 修改后的图像API =====
   // 添加图像到第一个视图 (可传入cv::Mat)
   void add_image_1(const cv::Mat &img);
@@ -212,6 +252,12 @@ private:
   size_t next_camera_id = 0;
   std::optional<size_t> main_camera_id = std::nullopt;
   
+  // ===== 新增：单帧平面和直线数据 =====
+  std::vector<PlaneInstance> frame_planes;
+  std::mutex mutex_planes;
+  std::vector<LineInstance> frame_lines;
+  std::mutex mutex_lines;
+  
   // 预定义颜色映射
   std::unordered_map<std::string, Eigen::Vector3f> color_map;
 
@@ -236,9 +282,13 @@ private:
   // render settings
   bool b_show_trajectory = true;
   bool b_show_3D_points = true;
-  bool b_show_cameras = true;
+  bool b_show_cameras = true;  // 新增：控制是否显示相机
+  bool b_show_planes = true;   // 新增：控制是否显示平面
+  bool b_show_lines = true;    // 新增：控制是否显示直线
   bool b_follow_camera = true;
   bool b_camera_view = true;
+  
+  // 移除不需要的估计器变量
   bool b_show_est_bg = true;
   bool b_show_est_ba = true;
   bool b_show_est_dt = false;
@@ -278,6 +328,10 @@ private:
 
   // ===== 新增独立相机绘制函数 =====
   void draw_all_cameras(); // 在渲染循环中调用
+  
+  // ===== 新增平面和直线绘制函数 =====
+  void draw_all_planes();
+  void draw_all_lines();
 
 private:
   // 内部辅助函数

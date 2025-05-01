@@ -152,17 +152,19 @@ if __name__ == "__main__":
         # viewer.publish_traj(t_wc=current_t, q_wc=current_q_wxyz)
         # 注意：如果设置了主相机，publish_traj仍然会画出绿色相机，但视图不再跟随它
         
-        # 2. 清除上一帧的额外轨迹、独立相机和点云
+        # 2. 清除上一帧的额外轨迹、独立相机、点云、平面和直线
         viewer.clear_all_trajectories()
         viewer.clear_all_cameras()
         viewer.clear_all_points()
+        viewer.clear_all_planes()
+        viewer.clear_all_lines()
         
         # 3. 添加额外的轨迹 (使用新API)
         # 只显示螺旋线的一部分，模拟动态增长
         helix_idx = frame_count % (len(helix_traj_se3) + 50) # 比轨迹长一点，让它显示完后消失一会
         current_helix_pose_se3 = None
         if helix_idx < len(helix_traj_se3):
-            # 使用 SE3 添加螺旋线轨迹，不显示相机模型
+            # 使用 SE3 添加螺旋线轨迹，不显示相机
             viewer.add_trajectory_se3(
                 poses_se3=helix_traj_se3[:helix_idx+1], 
                 color=COLOR_CYAN, 
@@ -243,6 +245,33 @@ if __name__ == "__main__":
         viewer.add_points(cube_points, COLOR_RED, "cube", 6.0)
         viewer.add_points_with_colors(sphere_points, sphere_colors, "sphere", 5.0)
         viewer.add_points(grid_points, COLOR_GREEN, "grid", 4.0)
+        
+        # 6.5 新增：添加平面和直线
+        # 添加一个半透明的蓝色矩形平面在XZ平面上
+        plane_vertices = np.array([
+            [-1.0, 0.0, -1.0],
+            [ 1.0, 0.0, -1.0],
+            [ 1.0, 0.0,  1.0],
+            [-1.0, 0.0,  1.0]
+        ], dtype=np.float32)
+        viewer.add_plane(plane_vertices, color=COLOR_BLUE, alpha=0.4, label="xz_plane")
+        
+        # 添加一条从原点指向动态位置的粗黄色直线
+        line_end_point = np.array([np.sin(frame_count * 0.05) * 1.5, 
+                                   np.cos(frame_count * 0.05) * 1.5, 
+                                   0.5], dtype=np.float32)
+        viewer.add_line(np.zeros(3, dtype=np.float32), line_end_point, 
+                      color=COLOR_YELLOW, line_width=3.0, label="dynamic_line")
+        
+        # 添加一个位于原点，法线朝向Y轴正方向，半边长为0.8的绿色半透明平面
+        viewer.add_plane_normal_center(
+            normal=np.array([0.0, 1.0, 0.0], dtype=np.float32),
+            center=np.array([0.0, -1.0, 0.0], dtype=np.float32),
+            size=0.8,
+            color=COLOR_GREEN,
+            alpha=0.6,
+            label="y_normal_plane"
+        )
         
         # 7. 更新和显示图像 (使用新 API)
         img_copy = img.copy() # Start with the base image

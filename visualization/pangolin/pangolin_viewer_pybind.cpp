@@ -302,6 +302,101 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         }, py::arg("position"), py::arg("orientation"), py::arg("color"), 
            py::arg("quat_format") = "wxyz", py::arg("label") = "", py::arg("scale") = 0.1f, py::arg("line_width") = 1.0f)
 
+        // ===== 新增平面 API 绑定 =====
+        .def("clear_all_planes", &PangolinViewer::clear_all_planes)
+        .def("add_plane", [](PangolinViewer& self, 
+                            py::array_t<float>& vertices, 
+                            py::array_t<float>& color, 
+                            float alpha=0.5f, 
+                            const std::string& label="") {
+            // 检查顶点数组
+            if (vertices.ndim() != 2 || vertices.shape(1) != 3) {
+                throw std::runtime_error("Vertices array must be of shape (N, 3) with N >= 3");
+            }
+            if (vertices.shape(0) < 3) {
+                 throw std::runtime_error("Plane needs at least 3 vertices");
+            }
+            // 检查颜色数组
+            if (color.ndim() != 1 || color.shape(0) != 3) {
+                throw std::runtime_error("Color array must be of shape (3,)");
+            }
+
+            // 转换顶点
+            std::vector<Eigen::Vector3f> vertices_vec;
+            auto r = vertices.unchecked<2>();
+            for (ssize_t i = 0; i < r.shape(0); ++i) {
+                vertices_vec.emplace_back(r(i, 0), r(i, 1), r(i, 2));
+            }
+            // 转换颜色
+            auto c = color.unchecked<1>();
+            Eigen::Vector3f color_vec(c(0), c(1), c(2));
+            
+            self.add_plane(vertices_vec, color_vec, alpha, label);
+        }, py::arg("vertices"), py::arg("color"), py::arg("alpha") = 0.5f, py::arg("label") = "")
+        
+        // 新增：绑定基于法线、中心、尺寸的add_plane
+        .def("add_plane_normal_center", [](PangolinViewer& self,
+                                        py::array_t<float>& normal,
+                                        py::array_t<float>& center,
+                                        float size,
+                                        py::array_t<float>& color,
+                                        float alpha = 0.5f,
+                                        const std::string& label = "") {
+            // 检查输入数组形状
+            if (normal.ndim() != 1 || normal.shape(0) != 3) {
+                throw std::runtime_error("Normal array must be of shape (3,)");
+            }
+            if (center.ndim() != 1 || center.shape(0) != 3) {
+                throw std::runtime_error("Center array must be of shape (3,)");
+            }
+            if (color.ndim() != 1 || color.shape(0) != 3) {
+                throw std::runtime_error("Color array must be of shape (3,)");
+            }
+            
+            // 转换向量
+            auto n = normal.unchecked<1>();
+            Eigen::Vector3f normal_vec(n(0), n(1), n(2));
+            auto cen = center.unchecked<1>();
+            Eigen::Vector3f center_vec(cen(0), cen(1), cen(2));
+            auto c = color.unchecked<1>();
+            Eigen::Vector3f color_vec(c(0), c(1), c(2));
+            
+            // 调用C++函数（重载版本）
+            self.add_plane(normal_vec, center_vec, size, color_vec, alpha, label);
+        }, py::arg("normal"), py::arg("center"), py::arg("size"), py::arg("color"), py::arg("alpha")=0.5f, py::arg("label")="")
+        
+        // ===== 新增直线 API 绑定 =====
+        .def("clear_all_lines", &PangolinViewer::clear_all_lines)
+        .def("add_line", [](PangolinViewer& self,
+                           py::array_t<float>& start_point,
+                           py::array_t<float>& end_point,
+                           py::array_t<float>& color,
+                           float line_width = 1.0f,
+                           const std::string& label = "") {
+            // 检查点数组
+            if (start_point.ndim() != 1 || start_point.shape(0) != 3) {
+                throw std::runtime_error("Start point array must be of shape (3,)");
+            }
+            if (end_point.ndim() != 1 || end_point.shape(0) != 3) {
+                throw std::runtime_error("End point array must be of shape (3,)");
+            }
+            // 检查颜色数组
+            if (color.ndim() != 1 || color.shape(0) != 3) {
+                throw std::runtime_error("Color array must be of shape (3,)");
+            }
+            
+            // 转换点
+            auto s = start_point.unchecked<1>();
+            Eigen::Vector3f start_vec(s(0), s(1), s(2));
+            auto e = end_point.unchecked<1>();
+            Eigen::Vector3f end_vec(e(0), e(1), e(2));
+            // 转换颜色
+            auto c = color.unchecked<1>();
+            Eigen::Vector3f color_vec(c(0), c(1), c(2));
+            
+            self.add_line(start_vec, end_vec, color_vec, line_width, label);
+        }, py::arg("start_point"), py::arg("end_point"), py::arg("color"), py::arg("line_width") = 1.0f, py::arg("label") = "")
+
         // ===== 修改后的图像 API 绑定 =====
         .def("add_image_1", [](PangolinViewer &self, py::array_t<unsigned char> &img) {
             py::buffer_info buf = img.request();
