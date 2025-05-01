@@ -73,6 +73,10 @@ PangolinViewer::PangolinViewer(int w, int h, bool start_run_thread)
     
     // 初始化点云管理
     frame_point_clouds.clear();
+    frame_trajectories.clear();
+    frame_cameras.clear();
+    next_camera_id = 0;
+    main_camera_id = std::nullopt;
     
     // 初始化颜色映射
     color_map["red"] = Eigen::Vector3f(1.0f, 0.0f, 0.0f);
@@ -138,6 +142,13 @@ void PangolinViewer::reset_internal()
     {
         std::unique_lock<std::mutex> lock(mutex_trajectories);
         frame_trajectories.clear();
+    }
+    // 清空独立相机数据
+    {
+        std::unique_lock<std::mutex> lock(mutex_cameras);
+        frame_cameras.clear();
+        next_camera_id = 0;
+        main_camera_id = std::nullopt;
     }
 
     vio_dt_data_log.Clear();
@@ -241,6 +252,28 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
     // Clear entire screen
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    // 获取用于视图控制的位姿
+    Eigen::Vector3f view_control_t = cur_t_wc;
+    Eigen::Quaternionf view_control_q = cur_r_wc;
+    bool view_control_pose_valid = true; // 默认使用 publish_traj 的位姿
+
+    {
+        std::unique_lock<std::mutex> lock_cam(mutex_cameras);
+        if (main_camera_id.has_value()) {
+            auto it = frame_cameras.find(main_camera_id.value());
+            if (it != frame_cameras.end()) {
+                // 如果找到了指定的主相机，使用它的位姿
+                view_control_t = it->second.position;
+                view_control_q = it->second.orientation;
+                view_control_pose_valid = true;
+            } else {
+                // 如果设置了ID但找不到相机（可能清空了），重置ID并使用默认位姿
+                main_camera_id = std::nullopt;
+                 view_control_pose_valid = true; // 仍然使用默认publish_traj位姿
+            }
+        }
+    }
+
     std::unique_lock<std::mutex> lk3d(mutex_3D_show);
 
     if(pangolin::Pushed(*mRuntimeInfo->pb_step_by_step)) {
@@ -253,9 +286,10 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
         set_algorithm_wait_flag(false);
     }
 
+    // --- 视图控制逻辑 --- 
     Eigen::Matrix4f Twc = Eigen::Matrix4f::Identity();
-    Twc.block<3, 3>(0, 0) = cur_r_wc.toRotationMatrix();
-    Twc.block<3, 1>(0, 3) = cur_t_wc;
+    Twc.block<3, 3>(0, 0) = view_control_q.toRotationMatrix();
+    Twc.block<3, 1>(0, 3) = view_control_t;
 
     pangolin::OpenGlMatrix TwcGL;
     for (int i = 0; i < 4; ++i) {
@@ -265,9 +299,9 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
     }
     pangolin::OpenGlMatrix OwGL;
     OwGL.SetIdentity(); // Initialize to identity matrix
-    OwGL.m[12] = cur_t_wc.x(); // px
-    OwGL.m[13] = cur_t_wc.y(); // py
-    OwGL.m[14] = cur_t_wc.z(); // pz
+    OwGL.m[12] = view_control_t.x(); // px
+    OwGL.m[13] = view_control_t.y(); // py
+    OwGL.m[14] = view_control_t.z(); // pz
 
     if (*mRuntimeInfo->pb_follow_camera && b_follow_camera) {
         if (b_camera_view) {
@@ -308,33 +342,30 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
         );
         mRuntimeInfo->Visualization3D_camera->Follow(TwcGL);
     }
-    // follow_camera(cur_t_wc, cur_r_wc);
-
+    // ---------------------
 
     mRuntimeInfo->Visualization3D_display->Activate(*mRuntimeInfo->Visualization3D_camera);
     glClearColor(0.0f,0.0f,0.0f,1.0f);
 
-    // pangolin::glDrawColouredCube();
-
+    // 绘制坐标系
     glLineWidth(3);
     glBegin(GL_LINES);
-    glColor3f(1, 0, 0);
-    glVertex3f(0, 0, 0);
-    glVertex3f(0.2, 0, 0);
-    glColor3f(0, 1, 0);
-    glVertex3f(0, 0, 0);
-    glVertex3f(0, 0.2, 0);
-    glColor3f(0, 0, 1);
-    glVertex3f(0, 0, 0);
-    glVertex3f(0, 0, 0.2);
+    glColor3f(1, 0, 0); glVertex3f(0, 0, 0); glVertex3f(0.2, 0, 0);
+    glColor3f(0, 1, 0); glVertex3f(0, 0, 0); glVertex3f(0, 0.2, 0);
+    glColor3f(0, 0, 1); glVertex3f(0, 0, 0); glVertex3f(0, 0, 0.2);
     glEnd();
 
+    // 绘制主相机（来自 publish_traj）
     if(b_show_trajectory) {
         draw_trajectory(vio_traj, Eigen::Vector3f(0.0f, 1.0f, 0.0f));
         draw_trajectory_gt(traj_gt, Eigen::Vector3f(1.0f, 0.0f, 0.0f));
-        draw_current_camera(cur_t_wc, cur_r_wc);
-        draw_current_camera(cur_t_wc_gt, cur_r_wc_gt);
+        draw_current_camera(cur_t_wc, cur_r_wc); // 总是绘制 publish_traj 的当前相机
+        draw_current_camera(cur_t_wc_gt, cur_r_wc_gt); // 绘制真值相机
     }
+    
+    // 绘制额外添加的独立相机
+    draw_all_cameras();
+
     if(b_show_3D_points) {
         // 绘制原始点
         draw_3D_points(cur_slam_pts, Eigen::Vector3f(1.0f, 0.0f, 0.0f), 8);
@@ -1009,4 +1040,65 @@ void PangolinViewer::se3_to_quat_trans(const Eigen::Matrix4f& se3, Eigen::Quater
     t = se3.block<3, 1>(0, 3);
     q = Eigen::Quaternionf(se3.block<3, 3>(0, 0));
     q.normalize();
+}
+
+// ===== 新增独立相机实现 =====
+void PangolinViewer::clear_all_cameras() {
+    std::unique_lock<std::mutex> lock(mutex_cameras);
+    frame_cameras.clear();
+    // next_camera_id 不需要重置，保持递增
+    // main_camera_id 保持不变，除非显式重置或关联相机被移除
+}
+
+size_t PangolinViewer::add_camera_quat(const Eigen::Vector3f& position,
+                                   const Eigen::Quaternionf& orientation,
+                                   const Eigen::Vector3f& color,
+                                   const std::string& label,
+                                   float scale,
+                                   float line_width) {
+    std::unique_lock<std::mutex> lock(mutex_cameras);
+    size_t current_id = next_camera_id++;
+    
+    CameraInstance cam;
+    cam.id = current_id;
+    cam.position = position;
+    cam.orientation = orientation.normalized(); // 确保归一化
+    cam.color = color;
+    cam.label = label.empty() ? "camera_" + std::to_string(current_id) : label;
+    cam.scale = scale;
+    cam.line_width = line_width;
+    
+    frame_cameras[current_id] = cam;
+    return current_id;
+}
+
+size_t PangolinViewer::add_camera_se3(const Eigen::Matrix4f& pose_se3,
+                                  const Eigen::Vector3f& color,
+                                  const std::string& label,
+                                  float scale,
+                                  float line_width) {
+    Eigen::Quaternionf q;
+    Eigen::Vector3f t;
+    se3_to_quat_trans(pose_se3, q, t);
+    // 直接调用quat版本
+    return add_camera_quat(t, q, color, label, scale, line_width);
+}
+
+void PangolinViewer::set_main_camera(size_t camera_id) {
+    // 不需要锁，因为只写一个optional变量，外部读取时会加锁检查map
+    main_camera_id = camera_id;
+}
+
+// ===== 新增独立相机绘制实现 =====
+void PangolinViewer::draw_all_cameras() {
+    std::unique_lock<std::mutex> lock(mutex_cameras);
+    for (const auto& pair : frame_cameras) {
+        const auto& cam = pair.second;
+        Eigen::Vector4f color_rgba(cam.color.x(), cam.color.y(), cam.color.z(), 1.0f);
+        // 注意：当前 draw_current_camera 不支持 line_width，所以暂时忽略 cam.line_width
+        // 如果需要线宽控制，需要修改 draw_current_camera 或使用其他绘制方式
+        glLineWidth(cam.line_width); // 尝试在这里设置线宽
+        draw_current_camera(cam.position, cam.orientation, color_rgba, cam.scale);
+    }
+    glLineWidth(1.0f); // 恢复默认线宽
 }

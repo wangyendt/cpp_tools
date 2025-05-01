@@ -4,6 +4,10 @@
 #include <condition_variable>
 #include <thread>
 #include <unordered_map>
+#include <optional>
+#include <map>
+#include <vector>
+#include <string>
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
@@ -73,6 +77,19 @@ public:
       Trajectory(const std::string& n = "default_traj") : name(n) {}
   };
 
+  // ===== 新增独立相机结构体 =====
+  struct CameraInstance {
+      size_t id;
+      Eigen::Vector3f position;
+      Eigen::Quaternionf orientation;
+      Eigen::Vector3f color = Eigen::Vector3f(1.0f, 1.0f, 0.0f); // 默认黄色
+      float scale = 0.1f; // 相机模型大小
+      float line_width = 1.0f;
+      std::string label;
+
+      // 构造函数等可以按需添加
+  };
+
   // ===== 新增轨迹API =====
   // 在每次渲染循环开始时清除所有额外添加的轨迹
   void clear_all_trajectories();
@@ -93,6 +110,28 @@ public:
                          float line_width = 1.0f,
                          bool show_cameras = false,
                          float camera_size = 0.05f);
+
+  // ===== 新增独立相机API =====
+  // 清除所有独立相机
+  void clear_all_cameras();
+
+  // 添加独立相机（位姿用四元数表示），返回相机ID
+  size_t add_camera_quat(const Eigen::Vector3f& position,
+                         const Eigen::Quaternionf& orientation,
+                         const Eigen::Vector3f& color = Eigen::Vector3f(1.0f, 1.0f, 0.0f),
+                         const std::string& label = "",
+                         float scale = 0.1f,
+                         float line_width = 1.0f);
+                         
+  // 添加独立相机（位姿用SE3矩阵表示），返回相机ID
+  size_t add_camera_se3(const Eigen::Matrix4f& pose_se3,
+                       const Eigen::Vector3f& color = Eigen::Vector3f(1.0f, 1.0f, 0.0f),
+                       const std::string& label = "",
+                       float scale = 0.1f,
+                       float line_width = 1.0f);
+                       
+  // 设置主相机，用于视图跟随
+  void set_main_camera(size_t camera_id);
 
   // 在每次渲染循环开始时清除所有点云
   void clear_all_points();
@@ -175,6 +214,12 @@ private:
   // 单帧轨迹数据 - 每次渲染循环都会更新
   std::vector<Trajectory> frame_trajectories;
   std::mutex mutex_trajectories;
+  
+  // 单帧独立相机数据 - 每次渲染循环都会更新
+  std::map<size_t, CameraInstance> frame_cameras;
+  std::mutex mutex_cameras;
+  size_t next_camera_id = 0;
+  std::optional<size_t> main_camera_id = std::nullopt;
   
   // 预定义颜色映射
   std::unordered_map<std::string, Eigen::Vector3f> color_map;
@@ -260,6 +305,9 @@ private:
   void draw_history_plane_vertical();
   void draw_trajectory_gt(const std::vector<Eigen::Vector3f> &traj,
                           Eigen::Vector3f color = Eigen::Vector3f(1.0f, 0.0f, 0.0f));
+
+  // ===== 新增独立相机绘制函数 =====
+  void draw_all_cameras(); // 在渲染循环中调用
 };
 
 #endif // PANGOLIN_VIEWER_H

@@ -135,63 +135,122 @@ if __name__ == "__main__":
     frame_count = 0
     cube_extra_points, line_extra_points, random_extra_points = [], [], []
     
+    # 用于演示主相机切换
+    follow_helix_end = False
+    helix_end_cam_id = None
+    static_cam_id = None
+
     while viewer.should_not_quit():
         frame_count += 1
         # 更新主轨迹索引（循环）
         main_idx = frame_count % len(main_traj_t)
         
-        # 1. 发布主轨迹的当前位姿 (使用旧API)
-        # 注意 scipy 输出的 quat 是 xyzw, 我们需要转成 Eigen/Pangolin 的 wxyz
-        # 或者在绑定时处理格式
-        # 当前绑定add_trajectory_quat默认处理wxyz输入, publish_traj的绑定没有处理，需要手动转
+        # 1. 发布主轨迹的当前位姿 (使用旧API，视图默认跟随它)
         # current_t = main_traj_t[main_idx]
         # current_q_xyzw = main_traj_q[main_idx]
         # current_q_wxyz = np.array([current_q_xyzw[3], current_q_xyzw[0], current_q_xyzw[1], current_q_xyzw[2]], dtype=np.float32)
         # viewer.publish_traj(t_wc=current_t, q_wc=current_q_wxyz)
+        # 注意：如果设置了主相机，publish_traj仍然会画出绿色相机，但视图不再跟随它
         
-        # 2. 清除上一帧的额外轨迹和点云
+        # 2. 清除上一帧的额外轨迹、独立相机和点云
         viewer.clear_all_trajectories()
+        viewer.clear_all_cameras()
         viewer.clear_all_points()
         
         # 3. 添加额外的轨迹 (使用新API)
         # 只显示螺旋线的一部分，模拟动态增长
         helix_idx = frame_count % (len(helix_traj_se3) + 50) # 比轨迹长一点，让它显示完后消失一会
+        current_helix_pose_se3 = None
         if helix_idx < len(helix_traj_se3):
-            # 使用 SE3 添加螺旋线轨迹，显示相机模型
+            # 使用 SE3 添加螺旋线轨迹，不显示相机模型
             viewer.add_trajectory_se3(
                 poses_se3=helix_traj_se3[:helix_idx+1], 
                 color=COLOR_CYAN, 
                 label="helix_se3", 
                 line_width=2.0, 
-                show_cameras=False, 
+                show_cameras=False, # 不在这里显示相机模型
                 camera_size=0.04
             )
+            current_helix_pose_se3 = helix_traj_se3[helix_idx]
         
         # 添加主轨迹的历史路径 (只画线)，使用 quat 添加
-        # main_traj_q 是 xyzw, 指定 quat_format="xyzw"
         viewer.add_trajectory_quat(
             positions=main_traj_t[:main_idx+1],
             orientations=main_traj_q[:main_idx+1], # xyzw
             color=COLOR_GREEN,
-            quat_format="xyzw", # 指定输入格式
+            quat_format="xyzw", 
             label="main_history",
             line_width=3.0,
-            # show_cameras=True # 不显示历史相机模型
+            # show_cameras=True # 可以选择显示历史相机
+        )
+        
+        # 4. 添加独立的相机 (使用新API)
+        # 添加一个静态相机
+        static_cam_pose = np.identity(4, dtype=np.float32)
+        static_cam_pose[0, 3] = 0.5 # x
+        static_cam_pose[1, 3] = 0.2 # y
+        static_cam_pose[2, 3] = 0.1 # z
+        # 让它稍微旋转一下
+        static_rot = R.from_euler('y', -np.pi / 6).as_matrix()
+        static_cam_pose[:3, :3] = static_rot
+        static_cam_id = viewer.add_camera_se3(
+            pose_se3=static_cam_pose, 
+            color=COLOR_ORANGE, 
+            label="static_cam", 
+            scale=0.15, 
+            line_width=2.0
         )
 
-        # 4. 添加点云 (使用之前的API)
+        # 添加螺旋线末端的相机（如果螺旋线正在显示）
+        if current_helix_pose_se3 is not None:
+            helix_end_cam_id = viewer.add_camera_se3(
+                pose_se3=current_helix_pose_se3, 
+                color=COLOR_MAGENTA, 
+                label="helix_end_cam", 
+                scale=0.1, 
+                line_width=1.5
+            )
+            
+        # 添加主轨迹当前位置的相机（使用quat）
+        current_t = main_traj_t[main_idx]
+        current_q_xyzw = main_traj_q[main_idx]
+        main_current_cam_id = viewer.add_camera_quat(
+            position=current_t,
+            orientation=current_q_xyzw, # xyzw
+            color=COLOR_YELLOW,
+            quat_format="xyzw",
+            label="main_current_cam",
+            scale=0.12,
+            line_width=2.0
+        )
+
+        # 5. 设置主相机 (演示切换)
+        if frame_count % 150 < 50: # 前50帧跟随主轨迹当前相机
+             viewer.set_main_camera(main_current_cam_id)
+             follow_target = "Main Traj Cam"
+        elif frame_count % 150 < 100: # 中间50帧跟随螺旋线末端相机
+            if helix_end_cam_id is not None:
+                 viewer.set_main_camera(helix_end_cam_id)
+                 follow_target = "Helix End Cam"
+            else: # 如果螺旋线结束了，就跟随静态相机
+                viewer.set_main_camera(static_cam_id)
+                follow_target = "Static Cam (Helix Ended)"
+        else: # 后50帧跟随静态相机
+            viewer.set_main_camera(static_cam_id)
+            follow_target = "Static Cam"
+
+        # 6. 添加点云
         viewer.add_points(cube_points, COLOR_RED, "cube", 6.0)
         viewer.add_points_with_colors(sphere_points, sphere_colors, "sphere", 5.0)
         viewer.add_points(grid_points, COLOR_GREEN, "grid", 4.0)
-        viewer.add_points(line_points, COLOR_BLUE, "line", 6.0)
-        viewer.add_points(random_points_1, COLOR_BLUE, "random_points", 4.0)
-        viewer.add_points(random_points_2, COLOR_YELLOW, "random_points_2", 4.0)
         
-        # 5. 更新和显示图像
-        cv2.putText(img, f"Frame: {frame_count}", (50, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-        viewer.publish_track_img(img)
-        viewer.publish_plane_detection_img(img)
+        # 7. 更新和显示图像
+        img_copy = img.copy()
+        cv2.putText(img_copy, f"Frame: {frame_count}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        cv2.putText(img_copy, f"Following: {follow_target}", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
+        viewer.publish_track_img(img_copy)
+        viewer.publish_plane_detection_img(img_copy)
         
-        # 6. 渲染一帧
+        # 8. 渲染一帧
         viewer.show(delay_time_in_s=0.0)
-        time.sleep(0.03)
+        # time.sleep(0.03)
