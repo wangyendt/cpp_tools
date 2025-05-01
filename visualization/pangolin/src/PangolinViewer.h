@@ -152,7 +152,8 @@ public:
   void add_points_with_color_name(const std::vector<Eigen::Vector3f>& points, 
                                 const std::string& color_name = "red",
                                 const std::string& label = "",
-                                float point_size = 4.0f);
+                                float point_size = 4.0f,
+                                float line_width = 1.0f);
 
   // 原有API (保持兼容性)
   void publish_traj(Eigen::Quaternionf &q_wc, Eigen::Vector3f &t_wc);
@@ -160,11 +161,21 @@ public:
                          std::vector<Eigen::Vector3f> &msckf_pts);
   void publish_3D_points(std::map<size_t, Eigen::Vector3f> &slam_pts,
                          std::vector<Eigen::Vector3f> &msckf_pts);
-  void publish_track_img(cv::Mat &track_img);
+                         
+  // ===== 修改后的图像API =====
+  // 添加图像到第一个视图 (可传入cv::Mat)
+  void add_image_1(const cv::Mat &img);
+  // 添加图像到第一个视图 (可传入文件路径)
+  void add_image_1(const std::string& image_path);
+  
+  // 添加图像到第二个视图 (可传入cv::Mat)
+  void add_image_2(const cv::Mat &img);
+  // 添加图像到第二个视图 (可传入文件路径)
+  void add_image_2(const std::string& image_path);
+  
   // the order is timestamp, timesoffset, extrin_trans, velocity, bg, ba
   //              (0), (1), (2, 3, 4), (5, 6, 7), (8, 9, 10), (11, 12 ,13)
   void publish_vio_opt_data(std::vector<float> vals);
-  void publish_plane_detection_img(cv::Mat &plane_img);
   void publish_plane_triangulate_pts(
       std::map<size_t, Eigen::Vector3f> &plane_tri_pts);
   void publish_plane_vio_stable_pts(
@@ -308,6 +319,10 @@ private:
 
   // ===== 新增独立相机绘制函数 =====
   void draw_all_cameras(); // 在渲染循环中调用
+
+private:
+  // 内部辅助函数
+  cv::Mat resize_and_pad_image(const cv::Mat& img_in, int view_w, int view_h);
 };
 
 #endif // PANGOLIN_VIEWER_H

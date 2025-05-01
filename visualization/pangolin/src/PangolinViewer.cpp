@@ -541,19 +541,53 @@ void PangolinViewer::publish_3D_points(std::map<size_t, Eigen::Vector3f>& slam_p
     return;
 }
 
-void PangolinViewer::publish_track_img(cv::Mat& track_img_)
+void PangolinViewer::add_image_1(const cv::Mat& img_raw)
 {
+    if (!mRuntimeInfo || !mRuntimeInfo->track_result) return; // 检查视图是否已初始化
+    
     std::unique_lock<std::mutex> lk(mutex_img);
-    track_img = track_img_;
+    // 缩放和填充图像
+    cv::Mat processed_img = resize_and_pad_image(img_raw, track_img_width, track_img_height);
+    track_img = processed_img; // 存储处理后的图像
     track_img_changed = true;
-    return;
 }
 
-void PangolinViewer::publish_plane_detection_img(cv::Mat& plane_img) {
+void PangolinViewer::add_image_1(const std::string& image_path)
+{
+    cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
+    if(img.empty()) {
+        std::cerr << "Error: Could not load image from path: " << image_path << std::endl;
+        // 可以选择添加一个默认的错误图像
+        cv::Mat error_img = cv::Mat::zeros(track_img_height, track_img_width, CV_8UC3);
+        cv::putText(error_img, "Load Error", cv::Point(10, track_img_height / 2), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0,0,255), 1);
+        add_image_1(error_img);
+        return;
+    }
+    add_image_1(img);
+}
+
+void PangolinViewer::add_image_2(const cv::Mat& img_raw)
+{
+    if (!mRuntimeInfo || !mRuntimeInfo->plane_detection_result) return; // 检查视图是否已初始化
+    
     std::unique_lock<std::mutex> lk(mutex_plane_img);
-    plane_detection_img = plane_img;
+    // 缩放和填充图像 (假设第二个视图也使用track_img_width/height, 如果不同需要修改)
+    cv::Mat processed_img = resize_and_pad_image(img_raw, track_img_width, track_img_height);
+    plane_detection_img = processed_img; // 存储处理后的图像
     plane_detection_img_changed = true;
-    return;
+}
+
+void PangolinViewer::add_image_2(const std::string& image_path)
+{
+    cv::Mat img = cv::imread(image_path, cv::IMREAD_COLOR);
+     if(img.empty()) {
+        std::cerr << "Error: Could not load image from path: " << image_path << std::endl;
+        cv::Mat error_img = cv::Mat::zeros(track_img_height, track_img_width, CV_8UC3);
+        cv::putText(error_img, "Load Error", cv::Point(10, track_img_height / 2), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0,0,255), 1);
+        add_image_2(error_img);
+        return;
+    }
+    add_image_2(img);
 }
 
 void PangolinViewer::publish_plane_triangulate_pts(std::map<size_t, Eigen::Vector3f>& plane_tri_pts) {
@@ -914,7 +948,7 @@ void PangolinViewer::add_points(const std::vector<Eigen::Vector3f>& points,
 void PangolinViewer::add_points_with_color_name(const std::vector<Eigen::Vector3f>& points, 
                                             const std::string& color_name,
                                             const std::string& label,
-                                            float point_size) {
+                                            float point_size, float line_width) {
     Eigen::Vector3f color = parse_color_name(color_name);
     add_points(points, color, label, point_size);
 }
@@ -1101,4 +1135,62 @@ void PangolinViewer::draw_all_cameras() {
         draw_current_camera(cam.position, cam.orientation, color_rgba, cam.scale);
     }
     glLineWidth(1.0f); // 恢复默认线宽
+}
+
+// ===== 修改后的图像 API 实现 =====
+
+// 内部辅助函数：缩放和填充图像以适应视图
+cv::Mat PangolinViewer::resize_and_pad_image(const cv::Mat& img_in, int view_w, int view_h) {
+    if (img_in.empty() || view_w <= 0 || view_h <= 0) {
+        return cv::Mat::zeros(view_h, view_w, CV_8UC3); // 返回黑色图像
+    }
+
+    int img_w = img_in.cols;
+    int img_h = img_in.rows;
+    float img_aspect = (float)img_w / img_h;
+    float view_aspect = (float)view_w / view_h;
+
+    int new_w, new_h;
+    float resize_scale;
+
+    // 优先匹配宽度原则
+    float required_height = static_cast<float>(view_w) / img_aspect;
+
+    if (required_height <= view_h) { // 可以匹配宽度，高度足够
+        new_w = view_w;
+        new_h = static_cast<int>(std::round(required_height));
+    } else { // 高度不够，必须匹配高度
+        new_h = view_h;
+        new_w = static_cast<int>(std::round(static_cast<float>(view_h) * img_aspect));
+    }
+    
+    // 确保 new_w 和 new_h 不超过 view_w 和 view_h
+    new_w = std::min(new_w, view_w);
+    new_h = std::min(new_h, view_h);
+    
+    // 如果计算出的新尺寸无效，则返回错误图像
+    if (new_w <= 0 || new_h <= 0) {
+         return cv::Mat::zeros(view_h, view_w, CV_8UC3); // 返回黑色图像
+    }
+
+    cv::Mat resized_img;
+    cv::resize(img_in, resized_img, cv::Size(new_w, new_h));
+
+    // 如果尺寸已完全匹配，则无需填充
+    if (new_w == view_w && new_h == view_h) {
+        return resized_img;
+    }
+
+    // 创建黑色背景图
+    cv::Mat bg_img = cv::Mat::zeros(view_h, view_w, img_in.type());
+
+    // 计算粘贴位置 (居中)
+    int x_offset = (view_w - new_w) / 2;
+    int y_offset = (view_h - new_h) / 2;
+
+    // 定义ROI并粘贴
+    cv::Rect roi(x_offset, y_offset, new_w, new_h);
+    resized_img.copyTo(bg_img(roi));
+
+    return bg_img;
 }

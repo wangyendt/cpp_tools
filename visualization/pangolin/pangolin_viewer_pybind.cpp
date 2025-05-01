@@ -332,17 +332,24 @@ PYBIND11_MODULE(pangolin_viewer, m) {
 			// Call the method with the converted vectors
 			self.publish_3D_points(vec_slam_pts, vec_msckf_pts);
 		})
-        .def("publish_track_img", [](PangolinViewer &self, py::array_t<unsigned char> &img) {
+        // ===== 修改后的图像 API 绑定 =====
+        .def("add_image_1", [](PangolinViewer &self, py::array_t<unsigned char> &img) {
             py::buffer_info buf = img.request();
             cv::Mat mat(static_cast<int>(buf.shape[0]), static_cast<int>(buf.shape[1]), CV_8UC3, buf.ptr);
-            self.publish_track_img(mat);
-        })
+            self.add_image_1(mat);
+        }, py::arg("img")) // Bind the cv::Mat version
+        .def("add_image_1", static_cast<void (PangolinViewer::*)(const std::string&)>(&PangolinViewer::add_image_1), 
+             py::arg("image_path")) // Bind the string path version
+             
+        .def("add_image_2", [](PangolinViewer &self, py::array_t<unsigned char> &img) {
+            py::buffer_info buf = img.request();
+            cv::Mat mat(static_cast<int>(buf.shape[0]), static_cast<int>(buf.shape[1]), CV_8UC3, buf.ptr);
+            self.add_image_2(mat);
+        }, py::arg("img")) // Bind the cv::Mat version
+        .def("add_image_2", static_cast<void (PangolinViewer::*)(const std::string&)>(&PangolinViewer::add_image_2), 
+             py::arg("image_path")) // Bind the string path version
+             
         .def("publish_vio_opt_data", &PangolinViewer::publish_vio_opt_data, py::arg("vals"))
-        .def("publish_plane_detection_img", [](PangolinViewer &self, py::array_t<unsigned char> &img) {
-            py::buffer_info buf = img.request();
-            cv::Mat mat(static_cast<int>(buf.shape[0]), static_cast<int>(buf.shape[1]), CV_8UC3, buf.ptr);
-            self.publish_plane_detection_img(mat);
-        })
 		.def("publish_plane_triangulate_pts", [](PangolinViewer &self, const std::map<size_t, py::EigenDRef<Eigen::Vector3f>>& pts) {
 			std::map<size_t, Eigen::Vector3f> plane_tri_pts;
 			for (const auto& item : pts) {

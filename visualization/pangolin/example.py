@@ -244,13 +244,23 @@ if __name__ == "__main__":
         viewer.add_points_with_colors(sphere_points, sphere_colors, "sphere", 5.0)
         viewer.add_points(grid_points, COLOR_GREEN, "grid", 4.0)
         
-        # 7. 更新和显示图像
-        img_copy = img.copy()
+        # 7. 更新和显示图像 (使用新 API)
+        img_copy = img.copy() # Start with the base image
         cv2.putText(img_copy, f"Frame: {frame_count}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         cv2.putText(img_copy, f"Following: {follow_target}", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
-        viewer.publish_track_img(img_copy)
-        viewer.publish_plane_detection_img(img_copy)
+        
+        # 添加第一个图像 (使用Numpy数组)
+        viewer.add_image_1(img=img_copy)
+        
+        # 添加第二个图像 (使用文件路径，测试缩放)
+        # viewer.add_image_2(image_path='xxx')
+        viewer.add_image_2(img=img_copy)
         
         # 8. 渲染一帧
         viewer.show(delay_time_in_s=0.0)
-        # time.sleep(0.03)
+        time.sleep(0.03)
+
+    # 清理测试图像文件
+    if os.path.exists(test_img_path):
+        os.remove(test_img_path)
+        print(f"测试图像文件已删除: {test_img_path}")
