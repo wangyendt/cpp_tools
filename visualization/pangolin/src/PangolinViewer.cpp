@@ -304,13 +304,7 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
     OwGL.m[13] = view_control_t.y(); // py
     OwGL.m[14] = view_control_t.z(); // pz
 
-    if (*mRuntimeInfo->pb_follow_camera && b_follow_camera) {
-        if (b_camera_view) {
-            mRuntimeInfo->Visualization3D_camera->Follow(TwcGL);
-        } else {
-            mRuntimeInfo->Visualization3D_camera->Follow(OwGL);
-        }
-    } else if (*mRuntimeInfo->pb_follow_camera && !b_follow_camera) {
+    if (*mRuntimeInfo->pb_follow_camera) {
         if (b_camera_view) {
             mRuntimeInfo->Visualization3D_camera->SetProjectionMatrix(
                 pangolin::ProjectionMatrix(w, h, 500, 500, w/2, h/2, 0.1, 1000)
