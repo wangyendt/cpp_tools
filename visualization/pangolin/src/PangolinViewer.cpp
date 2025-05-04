@@ -359,9 +359,9 @@ void PangolinViewer::extern_run_single_step(float delay_time_in_s) {
     // 绘制主相机（来自 publish_traj）
     if(b_show_trajectory) {
         draw_trajectory(vio_traj, Eigen::Vector3f(0.0f, 1.0f, 0.0f));
-        if(b_show_cameras) {
-            draw_current_camera(cur_t_wc, cur_r_wc);
-        }
+        // if(b_show_cameras) {
+        //     draw_current_camera(cur_t_wc, cur_r_wc);
+        // }
     }
     
     // 绘制额外添加的独立相机，同样受b_show_cameras控制
