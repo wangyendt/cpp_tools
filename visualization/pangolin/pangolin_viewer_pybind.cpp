@@ -33,6 +33,9 @@ PYBIND11_MODULE(pangolin_viewer, m) {
         // 新的点云可视化API
         .def("clear_all_points", &PangolinViewer::clear_all_points)
         
+        // 新增：统一清除所有可视化元素的API绑定
+        .def("clear_all_visual_elements", &PangolinViewer::clear_all_visual_elements)
+        
         // 添加点云 - 基本版本（单一颜色）
         .def("add_points", [=](PangolinViewer& self, py::array_t<float>& points, 
                              py::array_t<float>& color, const std::string& label="", float point_size=4.0f) {

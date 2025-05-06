@@ -1047,3 +1047,12 @@ void PangolinViewer::draw_all_lines() {
     
     glPopAttrib(); // 恢复之前保存的线宽和启用状态
 }
+
+// ===== 新增：统一清除所有可视化元素的实现 =====
+void PangolinViewer::clear_all_visual_elements() {
+    clear_all_trajectories();
+    clear_all_cameras();
+    clear_all_points();
+    clear_all_planes();
+    clear_all_lines();
+}

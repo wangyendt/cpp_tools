@@ -195,6 +195,9 @@ public:
                 float line_width = 1.0f,
                 const std::string& label = "");
   
+  // ===== 新增：统一清除所有可视化元素的API =====
+  void clear_all_visual_elements();
+  
   // ===== 修改后的图像API =====
   // 添加图像到第一个视图 (可传入cv::Mat)
   void add_image_1(const cv::Mat &img);
