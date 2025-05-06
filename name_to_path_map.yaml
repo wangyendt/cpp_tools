@@ -4,7 +4,7 @@ viola:
 cw_tools:
   path: cw_tools
   buildable: false
-pangolin:
+pangolin_viewer:
   path: visualization/pangolin
   buildable: true
 sliding_window_dsp:
