@@ -25,9 +25,6 @@
 [submodule "third_party/pangolin"]
 	path = third_party/pangolin
 	url = https://github.com/stevenlovegrove/Pangolin
-[submodule "third_party/Sophus"]
-	path = third_party/Sophus
-	url = https://github.com/strasdat/Sophus
 [submodule "third_party/pybind11"]
 	path = third_party/pybind11
 	url = https://github.com/pybind/pybind11
