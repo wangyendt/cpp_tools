@@ -1,6 +1,6 @@
 viola:
   path: viola
-  buildable: true
+  buildable: false
 cw_tools:
   path: cw_tools
   buildable: false
