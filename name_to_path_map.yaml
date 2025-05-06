@@ -23,3 +23,31 @@ eigen:
   path: third_party/eigen
   buildable: false
   installable: true
+opencv_contrib:
+  path: third_party/opencv_contrib
+  buildable: false
+  installable: true
+opencv:
+  path: third_party/opencv
+  buildable: false
+  installable: true
+boost:
+  path: third_party/boost
+  buildable: false
+  installable: true
+suitesparse:
+  path: third_party/suitesparse
+  buildable: false
+  installable: true
+gflags:
+  path: third_party/gflags
+  buildable: false
+  installable: true
+glog:
+  path: third_party/glog
+  buildable: false
+  installable: true
+pangolin:
+  path: third_party/pangolin
+  buildable: false
+  installable: true

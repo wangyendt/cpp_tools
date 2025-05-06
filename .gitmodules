@@ -4,3 +4,24 @@
 [submodule "third_party/eigen"]
 	path = third_party/eigen
 	url = https://gitlab.com/libeigen/eigen
+[submodule "third_party/opencv_contrib"]
+	path = third_party/opencv_contrib
+	url = https://github.com/opencv/opencv_contrib
+[submodule "third_party/opencv"]
+	path = third_party/opencv
+	url = https://github.com/opencv/opencv.git
+[submodule "third_party/boost"]
+	path = third_party/boost
+	url = https://github.com/boostorg/boost
+[submodule "third_party/suite_sparse"]
+	path = third_party/suite_sparse
+	url = https://github.com/DrTimothyAldenDavis/SuiteSparse
+[submodule "third_party/gflags"]
+	path = third_party/gflags
+	url = https://github.com/gflags/gflags
+[submodule "third_party/glog"]
+	path = third_party/glog
+	url = https://github.com/google/glog
+[submodule "third_party/pangolin"]
+	path = third_party/pangolin
+	url = https://github.com/fosrl/pangolin
