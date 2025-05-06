@@ -19,3 +19,7 @@ apriltag_detection:
 camera_models:
   path: cv/camera_models
   buildable: true
+eigen:
+  path: third_party/eigen
+  buildable: false
+  installable: true

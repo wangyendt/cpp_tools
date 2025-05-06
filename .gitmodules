@@ -1,3 +1,6 @@
 [submodule "viola"]
 	path = viola
 	url = https://github.com/symao/viola
+[submodule "third_party/eigen"]
+	path = third_party/eigen
+	url = https://gitlab.com/libeigen/eigen
