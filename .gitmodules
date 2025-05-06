@@ -1,6 +1,3 @@
-[submodule "viola"]
-	path = viola
-	url = https://github.com/symao/viola
 [submodule "third_party/eigen"]
 	path = third_party/eigen
 	url = https://gitlab.com/libeigen/eigen
@@ -25,3 +22,6 @@
 [submodule "third_party/pangolin"]
 	path = third_party/pangolin
 	url = https://github.com/fosrl/pangolin
+[submodule "third_party/viola"]
+	path = third_party/viola
+	url = https://github.com/symao/viola

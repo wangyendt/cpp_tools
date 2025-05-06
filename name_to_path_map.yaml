@@ -1,5 +1,5 @@
 viola:
-  path: viola
+  path: third_party/viola
   buildable: false
 cw_tools:
   path: cw_tools
