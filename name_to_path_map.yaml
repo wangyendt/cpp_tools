@@ -66,3 +66,7 @@ pybind11:
   path: third_party/pybind11
   buildable: false
   installable: true
+ceres:
+  path: third_party/ceres
+  buildable: false
+  installable: true
