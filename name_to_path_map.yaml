@@ -1,24 +1,31 @@
 viola:
   path: third_party/viola
   buildable: false
+  installable: false
 cw_tools:
   path: cw_tools
   buildable: false
+  installable: false
 pangolin_viewer:
   path: visualization/pangolin
   buildable: true
+  installable: false
 sliding_window_dsp:
   path: dsp/sliding_window
   buildable: true
+  installable: false
 adb_logcat_reader:
   path: adb
   buildable: true
+  installable: false
 apriltag_detection:
   path: cv/apriltag_detection
   buildable: true
+  installable: false
 camera_models:
   path: cv/camera_models
   buildable: true
+  installable: false
 eigen:
   path: third_party/eigen
   buildable: false
