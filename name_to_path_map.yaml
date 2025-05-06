@@ -58,3 +58,11 @@ pangolin:
   path: third_party/pangolin
   buildable: false
   installable: true
+sophus:
+  path: third_party/Sophus
+  buildable: false
+  installable: true
+pybind11:
+  path: third_party/pybind11
+  buildable: false
+  installable: true
