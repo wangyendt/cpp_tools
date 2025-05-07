@@ -30,6 +30,8 @@ eigen:
   path: third_party/eigen
   buildable: false
   installable: true
+  installation:
+    install_script: install_scripts/install_eigen.sh
 opencv_contrib:
   path: third_party/opencv_contrib
   buildable: false
@@ -38,39 +40,66 @@ opencv:
   path: third_party/opencv
   buildable: false
   installable: true
+  installation:
+    install_script: install_scripts/install_opencv.sh
+    extra_dependencies:
+      - opencv_contrib
 boost:
   path: third_party/boost
   buildable: false
   installable: true
+  installation:
+    install_script: install_scripts/install_boost.sh
 suitesparse:
   path: third_party/suitesparse
   buildable: false
   installable: true
+  installation:
+    install_script: install_scripts/install_suitesparse.sh
 gflags:
   path: third_party/gflags
   buildable: false
   installable: true
+  installation:
+    install_script: install_scripts/install_gflags.sh
 glog:
   path: third_party/glog
   buildable: false
   installable: true
+  installation:
+    install_script: install_scripts/install_glog.sh
 pangolin:
   path: third_party/pangolin
   buildable: false
   installable: true
+  installation:
+    install_script: install_scripts/install_pangolin.sh
 sophus:
   path: third_party/sophus
   buildable: false
   installable: true
+  installation:
+    install_script: install_scripts/install_sophus.sh
 pybind11:
   path: third_party/pybind11
   buildable: false
   installable: true
+  installation:
+    install_script: install_scripts/install_pybind11.sh
 ceres:
   path: third_party/ceres
   buildable: false
   installable: true
+  installation:
+    install_script: install_scripts/install_ceres.sh
+    extra_dependencies:
+      - glog
+      - gflags
+      - suitesparse
 cmake:
   path: third_party/cmake
   buildable: false
   installable: true
+  installation:
+    install_script: install_scripts/install_cmake.sh
+
