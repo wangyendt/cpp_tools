@@ -70,3 +70,7 @@ ceres:
   path: third_party/ceres
   buildable: false
   installable: true
+cmake:
+  path: third_party/cmake
+  buildable: false
+  installable: true

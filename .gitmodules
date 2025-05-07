@@ -34,3 +34,6 @@
 [submodule "third_party/sophus"]
 	path = third_party/sophus
 	url = https://github.com/strasdat/Sophus
+[submodule "third_party/cmake"]
+	path = third_party/cmake
+	url = https://github.com/Kitware/CMake
