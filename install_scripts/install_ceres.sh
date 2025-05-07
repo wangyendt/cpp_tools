@@ -203,30 +203,49 @@ cd "$ceres_build_subdir" || { echo "错误: 无法进入 Ceres 的 '$ceres_build
 CERES_CMAKE_ARGS="-DCMAKE_INSTALL_PREFIX=$GLOBAL_INSTALL_PREFIX -DCMAKE_BUILD_TYPE=Release"
 CERES_CMAKE_ARGS="$CERES_CMAKE_ARGS -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF"
 
-if [ "$GLOBAL_INSTALL_FLAG" = "true" ]; then
-    # 只有在全局安装开启时，才假设依赖项会被安装到系统路径，从而可以被Ceres找到
-    if [ -n "$GLOG_SRC_DIR" ] && [ "$GLOG_SRC_DIR" != "skip" ] && [ -d "$GLOG_SRC_DIR" ]; then
-        echo "(全局安装开启) 检测到 glog 从源码编译，Ceres 将使用系统 glog (MINIGLOG=OFF)。"
-        CERES_CMAKE_ARGS="$CERES_CMAKE_ARGS -DMINIGLOG=OFF"
-    else
-        echo "(全局安装开启) 未从源码编译 glog，Ceres 将尝试使用内置的 MINIGLOG 或系统已有的 glog。"
-    fi
+    # --- 新增: 明确指定依赖路径给 Ceres (当 GLOBAL_INSTALL_FLAG=false) ---
+    if [ "$GLOBAL_INSTALL_FLAG" = "false" ]; then
+        echo "(全局安装关闭) 正在为 Ceres 配置本地依赖项路径..."
+        LOCAL_DEPS_PREFIX_PATH=""
+        if [ -n "$GFLAGS_SRC_DIR" ] && [ "$GFLAGS_SRC_DIR" != "skip" ] && [ -d "$GFLAGS_SRC_DIR/build_for_ceres_script" ]; then
+            echo "  提供 gflags 路径: $GFLAGS_SRC_DIR/build_for_ceres_script"
+            # Ceres 可能通过 gflags_DIR 或 CMAKE_PREFIX_PATH 找到 gflags
+            # CMAKE_PREFIX_PATH 更通用
+            LOCAL_DEPS_PREFIX_PATH="$GFLAGS_SRC_DIR/build_for_ceres_script${LOCAL_DEPS_PREFIX_PATH:+;$LOCAL_DEPS_PREFIX_PATH}"
+        fi
+        if [ -n "$GLOG_SRC_DIR" ] && [ "$GLOG_SRC_DIR" != "skip" ] && [ -d "$GLOG_SRC_DIR/build_for_ceres_script" ]; then
+            echo "  提供 glog 路径: $GLOG_SRC_DIR/build_for_ceres_script"
+            LOCAL_DEPS_PREFIX_PATH="$GLOG_SRC_DIR/build_for_ceres_script${LOCAL_DEPS_PREFIX_PATH:+;$LOCAL_DEPS_PREFIX_PATH}"
+            CERES_CMAKE_ARGS="$CERES_CMAKE_ARGS -DMINIGLOG=OFF" # 明确告诉 Ceres 不要用 miniglog
+        fi
+        if [ -n "$SUITESPARSE_SRC_DIR" ] && [ "$SUITESPARSE_SRC_DIR" != "skip" ] && [ -d "$SUITESPARSE_SRC_DIR/build_for_ceres_script" ]; then
+            echo "  提供 SuiteSparse 路径: $SUITESPARSE_SRC_DIR/build_for_ceres_script"
+            # SuiteSparse 的查找可能比较复杂，CMAKE_PREFIX_PATH 是一个好的开始
+            # 可能还需要 -DSUITESPARSE_INCLUDE_DIR_HINTS 和 -DSUITESPARSE_LIBRARY_DIR_HINTS
+            LOCAL_DEPS_PREFIX_PATH="$SUITESPARSE_SRC_DIR/build_for_ceres_script${LOCAL_DEPS_PREFIX_PATH:+;$LOCAL_DEPS_PREFIX_PATH}"
+            CERES_CMAKE_ARGS="$CERES_CMAKE_ARGS -DSUITESPARSE=ON" # 尝试启用 SuiteSparse
+        fi
+        
+        if [ -n "$LOCAL_DEPS_PREFIX_PATH" ]; then
+            CERES_CMAKE_ARGS="$CERES_CMAKE_ARGS -DCMAKE_PREFIX_PATH=$LOCAL_DEPS_PREFIX_PATH"
+        fi
+    else # This is GLOBAL_INSTALL_FLAG = "true"
+        # 只有在全局安装开启时，才假设依赖项会被安装到系统路径，从而可以被Ceres找到
+        if [ -n "$GLOG_SRC_DIR" ] && [ "$GLOG_SRC_DIR" != "skip" ] && [ -d "$GLOG_SRC_DIR" ]; then # Check if glog was compiled from source by this script
+            echo "(全局安装开启) 检测到 glog 从源码编译，Ceres 将使用系统 glog (MINIGLOG=OFF)。"
+            CERES_CMAKE_ARGS="$CERES_CMAKE_ARGS -DMINIGLOG=OFF"
+        else
+            echo "(全局安装开启) 未从源码编译 glog，Ceres 将尝试使用内置的 MINIGLOG 或系统已有的 glog。"
+        fi
 
-    if [ -n "$SUITESPARSE_SRC_DIR" ] && [ "$SUITESPARSE_SRC_DIR" != "skip" ] && [ -d "$SUITESPARSE_SRC_DIR" ]; then
-        echo "(全局安装开启) 检测到 SuiteSparse 从源码编译，Ceres 将尝试启用 SuiteSparse 支持。"
-        CERES_CMAKE_ARGS="$CERES_CMAKE_ARGS -DSUITESPARSE=ON"
-    else
-        echo "(全局安装开启) 未从源码编译 SuiteSparse，Ceres 将根据系统情况决定是否启用它。"
+        if [ -n "$SUITESPARSE_SRC_DIR" ] && [ "$SUITESPARSE_SRC_DIR" != "skip" ] && [ -d "$SUITESPARSE_SRC_DIR" ]; then # Check if SuiteSparse was compiled from source by this script
+            echo "(全局安装开启) 检测到 SuiteSparse 从源码编译，Ceres 将尝试启用 SuiteSparse 支持。"
+            CERES_CMAKE_ARGS="$CERES_CMAKE_ARGS -DSUITESPARSE=ON"
+        else
+            echo "(全局安装开启) 未从源码编译 SuiteSparse，Ceres 将根据系统情况决定是否启用它。"
+        fi
     fi
-else
-    # 如果全局安装关闭，Ceres 应该使用自己的 miniglog (如果依赖未被外部提供)
-    # 并且不应该强制依赖外部的 SuiteSparse，除非用户通过其他方式配置了路径
-    echo "(全局安装关闭) Ceres 将尝试使用 MINIGLOG (如果未通过其他方式提供glog)。"
-    echo "(全局安装关闭) Ceres 将根据其默认设置或外部提供的路径来处理SuiteSparse。"
-    # 在这种情况下，如果用户希望 Ceres 找到未安装的依赖，需要手动为 Ceres 添加 CMake find hints
-    # 例如 -DCMAKE_PREFIX_PATH="/path/to/glog/build_for_ceres_script;/path/to/gflags/build_for_ceres_script"
-    # 但此脚本目前不自动处理这种复杂的 find hints
-fi
+    # --- 结束新增部分 ---
 
 if [ "$OS_TYPE" == "Darwin" ]; then
     echo "在 macOS 上，尝试为 Ceres 配置 Accelerate 框架 (BLAS/LAPACK)。"
