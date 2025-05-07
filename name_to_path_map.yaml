@@ -71,9 +71,7 @@ glog:
 pangolin:
   path: third_party/pangolin
   buildable: false
-  installable: true
-  installation:
-    install_script: install_scripts/install_pangolin.sh
+  installable: false
 sophus:
   path: third_party/sophus
   buildable: false
