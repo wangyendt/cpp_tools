@@ -10,9 +10,6 @@
 [submodule "third_party/boost"]
 	path = third_party/boost
 	url = https://github.com/boostorg/boost
-[submodule "third_party/suite_sparse"]
-	path = third_party/suite_sparse
-	url = https://github.com/DrTimothyAldenDavis/SuiteSparse
 [submodule "third_party/gflags"]
 	path = third_party/gflags
 	url = https://github.com/gflags/gflags
@@ -37,3 +34,6 @@
 [submodule "third_party/cmake"]
 	path = third_party/cmake
 	url = https://github.com/Kitware/CMake
+[submodule "third_party/suitesparse"]
+	path = third_party/suitesparse
+	url = https://github.com/DrTimothyAldenDavis/SuiteSparse

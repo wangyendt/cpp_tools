@@ -43,7 +43,7 @@ boost:
   buildable: false
   installable: true
 suitesparse:
-  path: third_party/suite_sparse
+  path: third_party/suitesparse
   buildable: false
   installable: true
 gflags:
