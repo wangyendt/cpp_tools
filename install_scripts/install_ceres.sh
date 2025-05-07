@@ -174,31 +174,48 @@ echo "----------------------------------------------------"
 original_dir_ceres=$(pwd)
 cd "$CERES_SRC_DIR" || { echo "错误: 无法进入 Ceres 源代码目录 '$CERES_SRC_DIR'"; exit 1; }
 
-ceres_build_subdir="build" # Ceres 通常使用 'build'
-if [ -d "$ceres_build_subdir" ]; then
-    echo "目录 '$ceres_build_subdir' 已存在于 Ceres 中。"
-    non_interactive_mode_enabled_ceres=$(echo "$NON_INTERACTIVE_INSTALL" | tr '[:upper:]' '[:lower:]')
-    if [ "$non_interactive_mode_enabled_ceres" = "true" ]; then
-        echo "NON_INTERACTIVE_INSTALL=true. 目录 '$ceres_build_subdir' 已存在于 Ceres 中。自动删除并重建..."
-        echo "正在删除 '$ceres_build_subdir'..."
-        rm -rf "$ceres_build_subdir"
-        if [ $? -ne 0 ]; then echo "错误: 无法删除 Ceres 的 '$ceres_build_subdir' 目录。"; exit 1; fi
+echo "DEBUG: Ceres处理阶段，当前 PWD: $(pwd)"
+
+# For Ceres itself, we always attempt to build. Installation is optional.
+# We use a specific build directory name to avoid conflict if the user has their own "build"
+ceres_build_dir="build_ceres_from_script"
+
+echo "DEBUG: ceres_build_dir 变量值: '${ceres_build_dir}'"
+echo "DEBUG: NON_INTERACTIVE_INSTALL 环境变量值: '${NON_INTERACTIVE_INSTALL}'"
+
+if [ -d "$ceres_build_dir" ]; then
+    echo "DEBUG: 目录 '$ceres_build_dir' (即 build_ceres_from_script) 已存在。"
+    non_interactive_mode_enabled=$(echo "$NON_INTERACTIVE_INSTALL" | tr '[:upper:]' '[:lower:]')
+    if [ "$non_interactive_mode_enabled" = "true" ]; then
+        echo "NON_INTERACTIVE_INSTALL=true. Ceres 构建目录 '$ceres_build_dir' 已存在。自动删除并重建..."
+        echo "正在删除 '$PWD/$ceres_build_dir'..." # PWD 用于确认路径
+        rm -rf "$ceres_build_dir"
+        if [ $? -ne 0 ]; then echo "错误: 无法删除目录 '$ceres_build_dir'。"; exit 1; fi
+        echo "目录 '$ceres_build_dir' 已删除。"
     else
-        printf "是否要删除并重建 '$ceres_build_subdir' 文件夹? (y/N): "
-        read -r response_ceres
-        response_ceres_lower=$(echo "$response_ceres" | tr '[:upper:]' '[:lower:]')
-        if [ "$response_ceres_lower" = "y" ] || [ "$response_ceres_lower" = "yes" ]; then
-            echo "正在删除 '$ceres_build_subdir'..."
-            rm -rf "$ceres_build_subdir"
-            if [ $? -ne 0 ]; then echo "错误: 无法删除 Ceres 的 '$ceres_build_subdir' 目录。"; exit 1; fi
+        echo "Ceres 构建目录 '$ceres_build_dir' 已存在。"
+        printf "是否要删除并重建它? (y/N): "
+        read -r response
+        response_lower=$(echo "$response" | tr '[:upper:]' '[:lower:]')
+        if [ "$response_lower" = "y" ] || [ "$response_lower" = "yes" ]; then
+            echo "正在删除 '$PWD/$ceres_build_dir'..."
+            rm -rf "$ceres_build_dir"
+            if [ $? -ne 0 ]; then echo "错误: 无法删除目录 '$ceres_build_dir'。"; exit 1; fi
+            echo "目录 '$ceres_build_dir' 已删除。"
         else
-            echo "继续使用 Ceres 现有的 '$ceres_build_subdir' 文件夹。"
+            echo "用户选择不删除现有目录 '$ceres_build_dir'。脚本将尝试在此目录中构建。"
         fi
     fi
+else
+    echo "DEBUG: 目录 '$ceres_build_dir' (即 build_ceres_from_script) 不存在。"
 fi
 
-mkdir -p "$ceres_build_subdir"
-cd "$ceres_build_subdir" || { echo "错误: 无法进入 Ceres 的 '$ceres_build_subdir' 目录"; exit 1; }
+echo "DEBUG: 同时检查一个名为 'build' 的目录是否存在:"
+ls -ld "build" 2>/dev/null || echo "DEBUG: 'build' 目录不存在或ls失败"
+
+echo "DEBUG: 即将执行: mkdir \"$ceres_build_dir\""
+mkdir "$ceres_build_dir"
+cd "$ceres_build_dir" || { echo "错误: 无法进入 Ceres 构建目录 '$ceres_build_dir'"; exit 1; }
 
 CERES_CMAKE_ARGS="-DCMAKE_INSTALL_PREFIX=$GLOBAL_INSTALL_PREFIX -DCMAKE_BUILD_TYPE=Release"
 CERES_CMAKE_ARGS="$CERES_CMAKE_ARGS -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF"
