@@ -33,7 +33,7 @@ eigen:
 opencv_contrib:
   path: third_party/opencv_contrib
   buildable: false
-  installable: true
+  installable: false
 opencv:
   path: third_party/opencv
   buildable: false
