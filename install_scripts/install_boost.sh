@@ -27,6 +27,28 @@ if [ ! -d "$BOOST_SRC_DIR" ]; then
     exit 1
 fi
 
+cd "$BOOST_SRC_DIR" || { echo "错误: 无法进入 Boost 源代码目录 '$BOOST_SRC_DIR'"; exit 1; }
+
+echo "----------------------------------------------------"
+echo "Checking for and initializing submodules within Boost source directory..."
+# Check if the current directory (which is BOOST_SRC_DIR) is a git repo.
+# The -d .git check is a common quick check; git rev-parse is more robust.
+if [ -d ".git" ] || git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    echo "Boost source directory appears to be a Git repository."
+    echo "Attempting: git submodule update --init --recursive"
+    if git submodule update --init --recursive; then
+        echo "Boost submodules updated successfully."
+    else
+        # This is a warning, not a fatal error, as Boost might not have submodules,
+        # they might be optional, or already up to date and the command returns non-zero for other reasons.
+        echo "警告: 'git submodule update --init --recursive' 在 Boost 源码目录中执行时失败或未执行任何操作。"
+        echo "如果 Boost 没有子模块或它们已是最新状态，这可能是正常的。"
+    fi
+else
+    echo "Boost source directory does not appear to be a Git repository. Skipping submodule update check."
+fi
+echo "----------------------------------------------------"
+
 # --- 获取核心数 ---
 OS_TYPE=$(uname -s)
 NUM_CORES=1
