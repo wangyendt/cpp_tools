@@ -73,16 +73,24 @@ cd "$OPENCV_SRC_DIR" || { echo "错误: 无法进入 OpenCV 源代码目录 '$OP
 
 build_subdir="build" # OpenCV 通常使用 'build'
 if [ -d "$build_subdir" ]; then
-    echo "目录 '$build_subdir' 已存在于 OpenCV 中。"
-    printf "是否要删除并重建 '$build_subdir' 文件夹? (y/N): "
-    read -r response
-    response_lower=$(echo "$response" | tr '[:upper:]' '[:lower:]')
-    if [ "$response_lower" = "y" ] || [ "$response_lower" = "yes" ]; then
+    non_interactive_mode_enabled=$(echo "$NON_INTERACTIVE_INSTALL" | tr '[:upper:]' '[:lower:]')
+    if [ "$non_interactive_mode_enabled" = "true" ]; then
+        echo "NON_INTERACTIVE_INSTALL=true. 目录 '$build_subdir' 已存在于 OpenCV 中。自动删除并重建..."
         echo "正在删除 '$build_subdir'..."
         rm -rf "$build_subdir"
         if [ $? -ne 0 ]; then echo "错误: 无法删除 OpenCV 的 '$build_subdir' 目录。"; exit 1; fi
     else
-        echo "继续使用 OpenCV 现有的 '$build_subdir' 文件夹。"
+        echo "目录 '$build_subdir' 已存在于 OpenCV 中。"
+        printf "是否要删除并重建 '$build_subdir' 文件夹? (y/N): "
+        read -r response
+        response_lower=$(echo "$response" | tr '[:upper:]' '[:lower:]')
+        if [ "$response_lower" = "y" ] || [ "$response_lower" = "yes" ]; then
+            echo "正在删除 '$build_subdir'..."
+            rm -rf "$build_subdir"
+            if [ $? -ne 0 ]; then echo "错误: 无法删除 OpenCV 的 '$build_subdir' 目录。"; exit 1; fi
+        else
+            echo "继续使用 OpenCV 现有的 '$build_subdir' 文件夹。"
+        fi
     fi
 fi
 

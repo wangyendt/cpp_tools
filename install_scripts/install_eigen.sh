@@ -38,11 +38,9 @@ if [ ! -d "$BUILD_DIR" ]; then
         exit 1
     fi
 else
-    echo "目录 '$BUILD_DIR' 已存在。建议在干净的 build 目录下进行安装。"
-    # Eigen 通常是头文件库，build 目录冲突问题不大，但为了规范，可以提示
-    read -r -p "是否要删除并重建 '$BUILD_DIR' 文件夹? (y/N): " response
-    response_lower=$(echo "$response" | tr '[:upper:]' '[:lower:]')
-    if [ "$response_lower" = "y" ] || [ "$response_lower" = "yes" ]; then
+    non_interactive_mode_enabled=$(echo "$NON_INTERACTIVE_INSTALL" | tr '[:upper:]' '[:lower:]')
+    if [ "$non_interactive_mode_enabled" = "true" ]; then
+        echo "NON_INTERACTIVE_INSTALL=true. 目录 '$BUILD_DIR' 已存在于 Eigen 中。自动删除并重建..."
         echo "正在删除 '$BUILD_DIR'..."
         rm -rf "$BUILD_DIR"
         if [ $? -ne 0 ]; then echo "错误: 无法删除目录 '$BUILD_DIR'。"; exit 1; fi
@@ -50,7 +48,20 @@ else
         mkdir "$BUILD_DIR"
         if [ $? -ne 0 ]; then echo "错误: 无法创建目录 '$BUILD_DIR'。"; exit 1; fi
     else
-        echo "继续使用现有的 '$BUILD_DIR' 文件夹。"
+        echo "目录 '$BUILD_DIR' 已存在。建议在干净的 build 目录下进行安装。"
+        # Eigen 通常是头文件库，build 目录冲突问题不大，但为了规范，可以提示
+        read -r -p "是否要删除并重建 '$BUILD_DIR' 文件夹? (y/N): " response
+        response_lower=$(echo "$response" | tr '[:upper:]' '[:lower:]')
+        if [ "$response_lower" = "y" ] || [ "$response_lower" = "yes" ]; then
+            echo "正在删除 '$BUILD_DIR'..."
+            rm -rf "$BUILD_DIR"
+            if [ $? -ne 0 ]; then echo "错误: 无法删除目录 '$BUILD_DIR'。"; exit 1; fi
+            echo "创建目录: $BUILD_DIR"
+            mkdir "$BUILD_DIR"
+            if [ $? -ne 0 ]; then echo "错误: 无法创建目录 '$BUILD_DIR'。"; exit 1; fi
+        else
+            echo "继续使用现有的 '$BUILD_DIR' 文件夹。"
+        fi
     fi
 fi
 

@@ -49,7 +49,7 @@ compile_cmake_project() {
     local extra_cmake_args="$3"
     local install_prefix="$4"
     local current_global_install_flag="$5" # 接收全局安装标志
-    local build_subdir="build_for_ceres_script" # 使用特定子目录名
+    local build_subdir="build_for_ceres_script" # 使用特定子目录名 for dependencies
 
     echo "----------------------------------------------------"
     echo "处理项目: $project_name"
@@ -71,16 +71,24 @@ compile_cmake_project() {
     cd "$src_dir" || { echo "错误: 无法进入目录 '$src_dir'"; exit 1; }
 
     if [ -d "$build_subdir" ]; then
-        echo "目录 '$build_subdir' 已存在于 $project_name 中。"
-        printf "是否要删除并重建 '$build_subdir' 文件夹? (y/N): "
-        read -r response
-        response_lower=$(echo "$response" | tr '[:upper:]' '[:lower:]')
-        if [ "$response_lower" = "y" ] || [ "$response_lower" = "yes" ]; then
+        non_interactive_mode_enabled=$(echo "$NON_INTERACTIVE_INSTALL" | tr '[:upper:]' '[:lower:]')
+        if [ "$non_interactive_mode_enabled" = "true" ]; then
+            echo "NON_INTERACTIVE_INSTALL=true. 目录 '$build_subdir' 已存在于 $project_name 中。自动删除并重建..."
             echo "正在删除 '$build_subdir'..."
             rm -rf "$build_subdir"
             if [ $? -ne 0 ]; then echo "错误: 无法删除目录 '$build_subdir'。"; exit 1; fi
         else
-            echo "继续使用现有的 '$build_subdir' 文件夹。"
+            echo "目录 '$build_subdir' 已存在于 $project_name 中。"
+            printf "是否要删除并重建 '$build_subdir' 文件夹? (y/N): "
+            read -r response
+            response_lower=$(echo "$response" | tr '[:upper:]' '[:lower:]')
+            if [ "$response_lower" = "y" ] || [ "$response_lower" = "yes" ]; then
+                echo "正在删除 '$build_subdir'..."
+                rm -rf "$build_subdir"
+                if [ $? -ne 0 ]; then echo "错误: 无法删除目录 '$build_subdir'。"; exit 1; fi
+            else
+                echo "继续使用现有的 '$build_subdir' 文件夹。"
+            fi
         fi
     fi
 
@@ -169,15 +177,23 @@ cd "$CERES_SRC_DIR" || { echo "错误: 无法进入 Ceres 源代码目录 '$CERE
 ceres_build_subdir="build" # Ceres 通常使用 'build'
 if [ -d "$ceres_build_subdir" ]; then
     echo "目录 '$ceres_build_subdir' 已存在于 Ceres 中。"
-    printf "是否要删除并重建 '$ceres_build_subdir' 文件夹? (y/N): "
-    read -r response_ceres
-    response_ceres_lower=$(echo "$response_ceres" | tr '[:upper:]' '[:lower:]')
-    if [ "$response_ceres_lower" = "y" ] || [ "$response_ceres_lower" = "yes" ]; then
+    non_interactive_mode_enabled_ceres=$(echo "$NON_INTERACTIVE_INSTALL" | tr '[:upper:]' '[:lower:]')
+    if [ "$non_interactive_mode_enabled_ceres" = "true" ]; then
+        echo "NON_INTERACTIVE_INSTALL=true. 目录 '$ceres_build_subdir' 已存在于 Ceres 中。自动删除并重建..."
         echo "正在删除 '$ceres_build_subdir'..."
         rm -rf "$ceres_build_subdir"
         if [ $? -ne 0 ]; then echo "错误: 无法删除 Ceres 的 '$ceres_build_subdir' 目录。"; exit 1; fi
     else
-        echo "继续使用 Ceres 现有的 '$ceres_build_subdir' 文件夹。"
+        printf "是否要删除并重建 '$ceres_build_subdir' 文件夹? (y/N): "
+        read -r response_ceres
+        response_ceres_lower=$(echo "$response_ceres" | tr '[:upper:]' '[:lower:]')
+        if [ "$response_ceres_lower" = "y" ] || [ "$response_ceres_lower" = "yes" ]; then
+            echo "正在删除 '$ceres_build_subdir'..."
+            rm -rf "$ceres_build_subdir"
+            if [ $? -ne 0 ]; then echo "错误: 无法删除 Ceres 的 '$ceres_build_subdir' 目录。"; exit 1; fi
+        else
+            echo "继续使用 Ceres 现有的 '$ceres_build_subdir' 文件夹。"
+        fi
     fi
 fi
 
