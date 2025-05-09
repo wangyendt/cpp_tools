@@ -306,12 +306,14 @@ PYBIND11_MODULE(camera_models, m) {
             self.distortion(p_u, d_u, J);
             return std::make_tuple(d_u, J);
         }, py::arg("p_u"), "Calculate distortion vector and its Jacobian")
+        /*
         .def("space_to_plane_with_jacobian", [](const CataCamera& self, const Eigen::Vector3d& P) {
             Eigen::Vector2d p;
             Eigen::Matrix<double, 2, 3> J;
             self.spaceToPlane(P, p, J);
             return std::make_tuple(p, J);
         }, py::arg("P"), "Project 3D point to 2D plane and return Jacobian")
+        */
         .def("read_parameters", &CataCamera::readParameters, py::arg("parameter_vec"))
         .def("write_parameters", [](const CataCamera& self) {
             std::vector<double> params;
