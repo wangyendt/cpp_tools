@@ -7,7 +7,7 @@ cw_tools:
   buildable: false
   installable: false
 pangolin_viewer:
-  path: visualization/pangolin
+  path: visualization/pangolin_viewer
   buildable: true
   installable: false
 sliding_window_dsp:
