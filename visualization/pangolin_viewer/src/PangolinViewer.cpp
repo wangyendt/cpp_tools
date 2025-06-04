@@ -182,7 +182,7 @@ void PangolinViewer::run()
 
 void PangolinViewer::extern_init() {
 	printf("START PANGOLIN FOR VIEWING!\n");
-    pangolin::CreateWindowAndBind("Main", 4 * w, 3 * h);
+    pangolin::CreateWindowAndBind("Main", w, h);
 	const int UI_WIDTH = 200;
 	glEnable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
