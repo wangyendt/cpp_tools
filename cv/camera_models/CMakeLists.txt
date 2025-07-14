@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
 
 project(cv_camera_models)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
