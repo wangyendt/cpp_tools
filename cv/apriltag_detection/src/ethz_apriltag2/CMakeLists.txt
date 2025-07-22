@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.10)
 project(ethz_apriltag2)
 
 add_definitions(-fPIC -O3)

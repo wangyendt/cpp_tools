@@ -25,12 +25,14 @@ find_package(Eigen3 3 REQUIRED NO_MODULE) # Use NO_MODULE for modern Eigen3 CMak
 find_package(pybind11 REQUIRED)
 # Boost is needed for shared_ptr used in the library headers
 find_package(Boost REQUIRED)
+find_package(Ceres REQUIRED)
 
 include_directories(
     ${INCLUDE_DIR}
     ${OpenCV_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIR}
     ${Boost_INCLUDE_DIRS}
+    ${CERES_INCLUDE_DIRS}
     # pybind11 include dir is handled by target_link_libraries(pybind11::headers)
 )
 
@@ -47,6 +49,7 @@ target_link_libraries(camera_models_lib PRIVATE
     ${OpenCV_LIBS}
     Eigen3::Eigen
     Boost::boost # Link Boost headers/components if needed, often headers are enough
+    Ceres::ceres
 )
 
 # --- Build Python Module ---
@@ -60,6 +63,7 @@ target_link_libraries(camera_models PRIVATE
     ${OpenCV_LIBS}
     Eigen3::Eigen
     Boost::boost
+    Ceres::ceres
     pybind11::module # Link pybind11 module library
 )
 # Include directories already set globally, but could be set per target

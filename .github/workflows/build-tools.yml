@@ -12,11 +12,33 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13']
-        tool: ['dsp/sliding_window', 'adb']
+        python-version: ['3.8']
+        tool: ['dsp/sliding_window', 'adb', 'cv/apriltag_detection', 'cv/camera_models', 'visualization/pangolin_viewer']
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/pip
+          /opt/homebrew/Cellar
+          /usr/local
+          ~/.local/share/cmake
+        key: ${{ matrix.os }}-deps-${{ hashFiles('.github/workflows/build-tools.yml') }}
+        restore-keys: |
+          ${{ matrix.os }}-deps-
+
+    - name: Cache build directories
+      if: matrix.tool == 'visualization/pangolin_viewer'
+      uses: actions/cache@v3
+      with:
+        path: |
+          ${{ matrix.tool }}/build/_deps
+        key: ${{ matrix.os }}-${{ matrix.tool }}-build-${{ hashFiles(format('{0}/CMakeLists.txt', matrix.tool)) }}
+        restore-keys: |
+          ${{ matrix.os }}-${{ matrix.tool }}-build-
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
@@ -28,12 +50,28 @@ jobs:
       run: |
         sudo add-apt-repository ppa:deadsnakes/ppa -y
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake python${{ matrix.python-version }}-dev
+        sudo apt-get install -y build-essential cmake python${{ matrix.python-version }}-dev \
+          libopencv-dev libopencv-contrib-dev \
+          libeigen3-dev \
+          libboost-all-dev \
+          libceres-dev \
+          libgl1-mesa-dev libglu1-mesa-dev \
+          libglew-dev \
+          libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+          libjpeg-dev libpng-dev libtiff-dev \
+          libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
 
     - name: Install dependencies on macOS
       if: matrix.os == 'macos-latest'
       run: |
-        brew install cmake pybind11
+        brew install cmake pybind11 \
+          opencv \
+          eigen \
+          boost \
+          ceres-solver \
+          glew \
+          jpeg libpng libtiff \
+          ffmpeg
 
     - name: Install Python dependencies
       run: |
@@ -41,16 +79,41 @@ jobs:
         pip install pybind11
 
     - name: Build ${{ matrix.tool }}
+      timeout-minutes: 30
       run: |
         cd ${{ matrix.tool }}
         mkdir -p build
         cd build
         if [ "${{ matrix.os }}" = "macos-latest" ]; then
-          cmake -DCMAKE_PREFIX_PATH="/opt/homebrew;$(python -m pybind11 --cmakedir)" ..
+          cmake -DCMAKE_PREFIX_PATH="/opt/homebrew;$(python -m pybind11 --cmakedir)" \
+            -DOpenCV_DIR=/opt/homebrew/lib/cmake/opencv4 \
+            -DEigen3_DIR=/opt/homebrew/share/eigen3/cmake \
+            -DBoost_DIR=/opt/homebrew/lib/cmake/Boost-* \
+            -DCeres_DIR=/opt/homebrew/lib/cmake/Ceres \
+            -DCMAKE_CXX_FLAGS="-std=c++17" \
+            ..
         else
-          cmake -DCMAKE_PREFIX_PATH="$(python -m pybind11 --cmakedir)" ..
+          if [ "${{ matrix.tool }}" = "visualization/pangolin_viewer" ]; then
+            cmake -DCMAKE_PREFIX_PATH="$(python -m pybind11 --cmakedir)" \
+              -DOpenCV_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
+              -DEigen3_DIR=/usr/share/eigen3/cmake \
+              -DCeres_DIR=/usr/lib/x86_64-linux-gnu/cmake/Ceres \
+              -DCMAKE_CXX_FLAGS="-std=c++17 -include cstdint" \
+              ..
+          else
+            cmake -DCMAKE_PREFIX_PATH="$(python -m pybind11 --cmakedir)" \
+              -DOpenCV_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
+              -DEigen3_DIR=/usr/share/eigen3/cmake \
+              -DCeres_DIR=/usr/lib/x86_64-linux-gnu/cmake/Ceres \
+              -DCMAKE_CXX_FLAGS="-std=c++17" \
+              ..
+          fi
         fi
-        make -j12
+        if [ "${{ matrix.tool }}" = "visualization/pangolin_viewer" ]; then
+          make -j4  # Use fewer cores for pangolin to avoid memory issues
+        else
+          make -j12
+        fi
 
     - name: Set artifact name
       id: artifact_name
