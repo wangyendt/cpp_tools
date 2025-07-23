@@ -7,7 +7,7 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(dsp_sw, m) {
+PYBIND11_MODULE(sliding_window_dsp, m) {
     py::class_<MKAverage>(m, "MKAverage")
         .def(py::init<int, int>())
         .def("addElement", &MKAverage::addElement)

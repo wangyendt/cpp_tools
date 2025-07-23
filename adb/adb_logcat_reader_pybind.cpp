@@ -3,7 +3,7 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(adb_logcat, m) {
+PYBIND11_MODULE(adb_logcat_reader, m) {
 	py::class_<ADBLogcatReader>(m, "ADBLogcatReader")
 		.def(py::init<>())
 		.def("clearLogcat", &ADBLogcatReader::clearLogcat)

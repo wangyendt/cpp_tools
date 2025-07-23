@@ -12,7 +12,7 @@ include_directories("/usr/local/include")
 
 find_package(pybind11 REQUIRED)
 
-pybind11_add_module(adb_logcat_reader adb_logcat_pybind.cpp)
+pybind11_add_module(adb_logcat_reader adb_logcat_reader_pybind.cpp)
 target_include_directories(
 	adb_logcat_reader
 	PRIVATE

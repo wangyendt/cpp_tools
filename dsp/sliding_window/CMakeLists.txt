@@ -41,7 +41,7 @@ set_target_properties(
     LIBRARY_OUTPUT_DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 
-pybind11_add_module(sliding_window_dsp dsp_sw_pybind.cpp)
+pybind11_add_module(sliding_window_dsp sliding_window_dsp_pybind.cpp)
 target_link_libraries(
 	sliding_window_dsp
 	PRIVATE

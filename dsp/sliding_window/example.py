@@ -13,10 +13,10 @@ import sys
 
 sys.path.append('./lib')
 os.system("mkdir -p build && cd build && cmake .. && make -j12")
-import dsp_sw
+import sliding_window_dsp
 import numpy as np
 
-dsp = dsp_sw.WelfordStd(100)
+dsp = sliding_window_dsp.WelfordStd(100)
 arr = np.arange(100)
 for i in range(105):
 	dsp.calcSlidingStd(i)

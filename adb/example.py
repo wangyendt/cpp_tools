@@ -14,9 +14,9 @@ import sys
 sys.path.append('./lib')
 os.system("mkdir -p build && cd build && cmake .. && make -j12")
 
-import adb_logcat
+import adb_logcat_reader
 
-logger = adb_logcat.ADBLogcatReader()
+logger = adb_logcat_reader.ADBLogcatReader()
 logger.clearLogcat()
 logger.startLogcat()
 while True:
