@@ -12,13 +12,13 @@ include_directories("/usr/local/include")
 
 find_package(pybind11 REQUIRED)
 
-pybind11_add_module(adb_logcat adb_logcat_pybind.cpp)
+pybind11_add_module(adb_logcat_reader adb_logcat_pybind.cpp)
 target_include_directories(
-	adb_logcat
+	adb_logcat_reader
 	PRIVATE
 	${SOURCE_ROOT}
 )
 set_target_properties(
-	adb_logcat
+	adb_logcat_reader
 	PROPERTIES LIBRARY_OUTPUT_DIRECTORY
 	${CMAKE_CURRENT_SOURCE_DIR}/lib)

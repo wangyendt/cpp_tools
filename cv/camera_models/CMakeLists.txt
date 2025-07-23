@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 project(cv_camera_models)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # --- Configuration ---
@@ -49,7 +49,7 @@ target_link_libraries(camera_models_lib PRIVATE
     ${OpenCV_LIBS}
     Eigen3::Eigen
     Boost::boost # Link Boost headers/components if needed, often headers are enough
-    Ceres::ceres
+    # Ceres::ceres
 )
 
 # --- Build Python Module ---
@@ -63,7 +63,7 @@ target_link_libraries(camera_models PRIVATE
     ${OpenCV_LIBS}
     Eigen3::Eigen
     Boost::boost
-    Ceres::ceres
+    # Ceres::ceres
     pybind11::module # Link pybind11 module library
 )
 # Include directories already set globally, but could be set per target
