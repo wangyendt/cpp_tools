@@ -3,13 +3,25 @@ name: Build Tools
 on:
   push:
     branches: [ main, develop ]
+    tags:
+      - 'v*'  # 匹配所有以v开头的标签，如v1.0.0
   pull_request:
     branches: [ main ]
+  release:
+    types: [created]  # 当创建新的release时触发
+
+# 添加权限配置
+permissions:
+  contents: write
+  actions: read
 
 jobs:
-  build:
+  # 普通构建job（只用Python 3.8）
+  build-test:
+    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') || github.event_name == 'pull_request'
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         python-version: ['3.8']
@@ -25,32 +37,11 @@ jobs:
 
     - name: Install Python dependencies
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install --upgrade pip setuptools wheel
         pip install pybind11
-
-    # 暂时注释掉缓存相关步骤
-    # - name: Cache dependencies
-    #   uses: actions/cache@v3
-    #   with:
-    #     path: |
-    #       ~/.cache/pip
-    #       /opt/homebrew/Cellar
-    #       /usr/local
-    #       ~/.local/share/cmake
-    #     key: ${{ matrix.os }}-deps-${{ runner.arch }}-${{ hashFiles('.github/workflows/build-tools.yml') }}-${{ hashFiles('**/CMakeLists.txt') }}
-    #     restore-keys: |
-    #       ${{ matrix.os }}-deps-${{ runner.arch }}-
-    #       ${{ matrix.os }}-deps-
-
-    # - name: Cache build directories
-    #   if: matrix.tool == 'visualization/pangolin_viewer'
-    #   uses: actions/cache@v3
-    #   with:
-    #     path: |
-    #       ${{ matrix.tool }}/build/_deps
-    #     key: ${{ matrix.os }}-${{ matrix.tool }}-build-${{ hashFiles(format('{0}/CMakeLists.txt', matrix.tool)) }}
-    #     restore-keys: |
-    #       ${{ matrix.os }}-${{ matrix.tool }}-build-
+        # 验证pybind11安装
+        python -c "import pybind11; print(f'pybind11 version: {pybind11.__version__}')"
+        python -c "import pybind11; print(f'pybind11 cmake path: {pybind11.get_cmake_dir()}')"
 
     - name: Install dependencies on Ubuntu
       if: matrix.os == 'ubuntu-latest'
@@ -152,14 +143,6 @@ jobs:
         CERES_CMAKE_DIR="${CERES_PREFIX}/lib/cmake/Ceres"
         echo "CERES_CMAKE_DIR=${CERES_CMAKE_DIR}" >> $GITHUB_ENV
         echo "Found Ceres at: ${CERES_CMAKE_DIR}"
-        
-        # Verify Python and pybind11
-        which python
-        python --version
-        python -c "import pybind11; print(f'pybind11 version: {pybind11.__version__}')"
-        PYBIND11_CMAKE_DIR=$(python -m pybind11 --cmakedir)
-        echo "PYBIND11_CMAKE_DIR=${PYBIND11_CMAKE_DIR}" >> $GITHUB_ENV
-        echo "Found pybind11 at: ${PYBIND11_CMAKE_DIR}"
 
     - name: Build ${{ matrix.tool }}
       timeout-minutes: 30
@@ -167,6 +150,11 @@ jobs:
         cd ${{ matrix.tool }}
         mkdir -p build
         cd build
+        
+        # 获取pybind11的CMake路径
+        PYBIND11_CMAKE_DIR=$(python -c "import pybind11; print(pybind11.get_cmake_dir())")
+        echo "Found pybind11 at: ${PYBIND11_CMAKE_DIR}"
+        
         if [ "${{ matrix.os }}" = "macos-latest" ]; then
           echo "Building on macOS with detected paths..."
           echo "OpenCV: ${OPENCV_CMAKE_DIR}"
@@ -181,32 +169,43 @@ jobs:
           [ -f "${EIGEN3_CMAKE_DIR}/Eigen3Config.cmake" ] && echo "Eigen3Config.cmake exists" || echo "Eigen3Config.cmake not found"
           [ -f "${BOOST_CMAKE_DIR}/BoostConfig.cmake" ] && echo "BoostConfig.cmake exists" || echo "BoostConfig.cmake not found"
           [ -f "${CERES_CMAKE_DIR}/CeresConfig.cmake" ] && echo "CeresConfig.cmake exists" || echo "CeresConfig.cmake not found"
+          [ -f "${PYBIND11_CMAKE_DIR}/pybind11Config.cmake" ] && echo "pybind11Config.cmake exists" || echo "pybind11Config.cmake not found"
           
           CMAKE_ARGS="-DCMAKE_PREFIX_PATH=/opt/homebrew;${PYBIND11_CMAKE_DIR}"
           CMAKE_ARGS="${CMAKE_ARGS} -DCMAKE_CXX_FLAGS=-std=c++17"
-          CMAKE_ARGS="${CMAKE_ARGS} -DCMAKE_MODULE_PATH=${EIGEN3_CMAKE_DIR}"  # 添加这行
+          CMAKE_ARGS="${CMAKE_ARGS} -DCMAKE_MODULE_PATH=${EIGEN3_CMAKE_DIR};${PYBIND11_CMAKE_DIR}"
           
           # Add dependency paths if they exist
           [ -n "${OPENCV_CMAKE_DIR}" ] && [ -d "${OPENCV_CMAKE_DIR}" ] && CMAKE_ARGS="${CMAKE_ARGS} -DOpenCV_DIR=${OPENCV_CMAKE_DIR}"
           [ -n "${EIGEN3_CMAKE_DIR}" ] && [ -d "${EIGEN3_CMAKE_DIR}" ] && CMAKE_ARGS="${CMAKE_ARGS} -DEigen3_DIR=${EIGEN3_CMAKE_DIR}"
           [ -n "${BOOST_CMAKE_DIR}" ] && [ -d "${BOOST_CMAKE_DIR}" ] && CMAKE_ARGS="${CMAKE_ARGS} -DBoost_DIR=${BOOST_CMAKE_DIR}"
           [ -n "${CERES_CMAKE_DIR}" ] && [ -d "${CERES_CMAKE_DIR}" ] && CMAKE_ARGS="${CMAKE_ARGS} -DCeres_DIR=${CERES_CMAKE_DIR}"
+          [ -n "${PYBIND11_CMAKE_DIR}" ] && [ -d "${PYBIND11_CMAKE_DIR}" ] && CMAKE_ARGS="${CMAKE_ARGS} -Dpybind11_DIR=${PYBIND11_CMAKE_DIR}"
           
           echo "Final CMake command: cmake ${CMAKE_ARGS} .."
           cmake ${CMAKE_ARGS} ..
         else
+          echo "Building on Ubuntu with detected paths..."
+          echo "pybind11: ${PYBIND11_CMAKE_DIR}"
+          
+          # 显示调试信息
+          echo "Checking if pybind11 CMake files exist:"
+          [ -f "${PYBIND11_CMAKE_DIR}/pybind11Config.cmake" ] && echo "pybind11Config.cmake exists" || echo "pybind11Config.cmake not found"
+          
           if [ "${{ matrix.tool }}" = "visualization/pangolin_viewer" ]; then
-            cmake -DCMAKE_PREFIX_PATH="$(python -m pybind11 --cmakedir)" \
+            cmake -DCMAKE_PREFIX_PATH="${PYBIND11_CMAKE_DIR}" \
               -DOpenCV_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
               -DEigen3_DIR=/usr/share/eigen3/cmake \
               -DCeres_DIR=/usr/lib/x86_64-linux-gnu/cmake/Ceres \
+              -Dpybind11_DIR="${PYBIND11_CMAKE_DIR}" \
               -DCMAKE_CXX_FLAGS="-std=c++17 -include cstdint" \
               ..
           else
-            cmake -DCMAKE_PREFIX_PATH="$(python -m pybind11 --cmakedir)" \
+            cmake -DCMAKE_PREFIX_PATH="${PYBIND11_CMAKE_DIR}" \
               -DOpenCV_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
               -DEigen3_DIR=/usr/share/eigen3/cmake \
               -DCeres_DIR=/usr/lib/x86_64-linux-gnu/cmake/Ceres \
+              -Dpybind11_DIR="${PYBIND11_CMAKE_DIR}" \
               -DCMAKE_CXX_FLAGS="-std=c++17" \
               ..
           fi
@@ -222,10 +221,245 @@ jobs:
       run: |
         TOOL_NAME="${{ matrix.tool }}"
         ARTIFACT_NAME="${TOOL_NAME//\//_}-${{ matrix.os }}-python${{ matrix.python-version }}"
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+          ARTIFACT_NAME="${ARTIFACT_NAME}-${VERSION}"
+        fi
         echo "name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.artifact_name.outputs.name }}
-        path: ${{ matrix.tool }}/lib/ 
+        path: ${{ matrix.tool }}/lib/
+
+  # Release构建job（使用多个Python版本）
+  build-release:
+    if: github.event_name == 'release' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ${{ matrix.os }}
+    # 为release job添加特定权限
+    permissions:
+      contents: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']  # 暂时移除3.13，因为可能还不稳定
+        tool: ['dsp/sliding_window', 'adb', 'cv/apriltag_detection', 'cv/camera_models', 'visualization/pangolin_viewer']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        pip install pybind11
+        # 验证pybind11安装
+        python -c "import pybind11; print(f'pybind11 version: {pybind11.__version__}')"
+        python -c "import pybind11; print(f'pybind11 cmake path: {pybind11.get_cmake_dir()}')"
+
+    - name: Install dependencies on Ubuntu
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo add-apt-repository ppa:deadsnakes/ppa -y
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake python${{ matrix.python-version }}-dev \
+          libopencv-dev libopencv-contrib-dev \
+          libeigen3-dev \
+          libboost-all-dev \
+          libceres-dev \
+          libgl1-mesa-dev libglu1-mesa-dev \
+          libglew-dev \
+          libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+          libjpeg-dev libpng-dev libtiff-dev \
+          libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
+
+    - name: Install dependencies on macOS
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew update
+        brew install cmake pybind11 \
+          opencv \
+          eigen \
+          boost \
+          ceres-solver \
+          glew \
+          jpeg libpng libtiff \
+          ffmpeg
+
+    - name: Detect dependency paths on macOS
+      if: matrix.os == 'macos-latest'
+      run: |
+        echo "Detecting dependency paths..."
+        
+        # Detect OpenCV
+        OPENCV_PREFIX=$(brew --prefix opencv)
+        OPENCV_CMAKE_DIR="${OPENCV_PREFIX}/lib/cmake/opencv4"
+        if [ ! -d "$OPENCV_CMAKE_DIR" ]; then
+          echo "OpenCV cmake dir not found at expected location, searching..."
+          OPENCV_CMAKE_DIR=$(find $(brew --prefix) -name "opencv4" -type d -path "*/cmake/*" 2>/dev/null | head -1)
+        fi
+        echo "OPENCV_CMAKE_DIR=${OPENCV_CMAKE_DIR}" >> $GITHUB_ENV
+        echo "Found OpenCV at: ${OPENCV_CMAKE_DIR}"
+        
+        # Detect Eigen3
+        EIGEN3_PREFIX=$(brew --prefix eigen)
+        echo "Searching for Eigen3 CMake files..."
+        # 尝试多个可能的路径
+        EIGEN3_PATHS=(
+          "${EIGEN3_PREFIX}/share/eigen3/cmake"
+          "${EIGEN3_PREFIX}/lib/cmake/eigen3"
+          "$(find ${EIGEN3_PREFIX} -name "Eigen3Config.cmake" -o -name "eigen3-config.cmake" 2>/dev/null | head -1 | xargs dirname)"
+        )
+        for path in "${EIGEN3_PATHS[@]}"; do
+          if [ -d "$path" ]; then
+            EIGEN3_CMAKE_DIR="$path"
+            break
+          fi
+        done
+        if [ -n "$EIGEN3_CMAKE_DIR" ]; then
+          echo "EIGEN3_CMAKE_DIR=${EIGEN3_CMAKE_DIR}" >> $GITHUB_ENV
+          echo "Found Eigen3 at: ${EIGEN3_CMAKE_DIR}"
+          ls -la "${EIGEN3_CMAKE_DIR}"
+        else
+          echo "Error: Could not find Eigen3 CMake files"
+          echo "Searched in:"
+          for path in "${EIGEN3_PATHS[@]}"; do
+            echo "  - $path"
+          done
+          find ${EIGEN3_PREFIX} -type f -name "*eigen*" 2>/dev/null
+          exit 1
+        fi
+        
+        # Detect Boost
+        BOOST_PREFIX=$(brew --prefix boost)
+        echo "Searching for Boost CMake files..."
+        BOOST_CMAKE_DIR=$(find "${BOOST_PREFIX}" -name "BoostConfig.cmake" -o -name "Boost-config.cmake" 2>/dev/null | head -1)
+        if [ -n "$BOOST_CMAKE_DIR" ]; then
+          BOOST_CMAKE_DIR=$(dirname "$BOOST_CMAKE_DIR")
+          echo "BOOST_CMAKE_DIR=${BOOST_CMAKE_DIR}" >> $GITHUB_ENV
+          echo "Found Boost at: ${BOOST_CMAKE_DIR}"
+        else
+          echo "Warning: Could not find Boost CMake files in standard location"
+          # Try alternative locations
+          BOOST_CMAKE_DIR=$(find /opt/homebrew -name "BoostConfig.cmake" -o -name "Boost-config.cmake" 2>/dev/null | head -1)
+          if [ -n "$BOOST_CMAKE_DIR" ]; then
+            BOOST_CMAKE_DIR=$(dirname "$BOOST_CMAKE_DIR")
+            echo "BOOST_CMAKE_DIR=${BOOST_CMAKE_DIR}" >> $GITHUB_ENV
+            echo "Found Boost at alternative location: ${BOOST_CMAKE_DIR}"
+          else
+            echo "Error: Could not find Boost CMake files"
+            exit 1
+          fi
+        fi
+        
+        # Detect Ceres
+        CERES_PREFIX=$(brew --prefix ceres-solver)
+        CERES_CMAKE_DIR="${CERES_PREFIX}/lib/cmake/Ceres"
+        echo "CERES_CMAKE_DIR=${CERES_CMAKE_DIR}" >> $GITHUB_ENV
+        echo "Found Ceres at: ${CERES_CMAKE_DIR}"
+
+    - name: Build ${{ matrix.tool }}
+      timeout-minutes: 30
+      run: |
+        cd ${{ matrix.tool }}
+        mkdir -p build
+        cd build
+        
+        # 获取pybind11的CMake路径
+        PYBIND11_CMAKE_DIR=$(python -c "import pybind11; print(pybind11.get_cmake_dir())")
+        echo "Found pybind11 at: ${PYBIND11_CMAKE_DIR}"
+        
+        if [ "${{ matrix.os }}" = "macos-latest" ]; then
+          echo "Building on macOS with detected paths..."
+          echo "OpenCV: ${OPENCV_CMAKE_DIR}"
+          echo "Eigen3: ${EIGEN3_CMAKE_DIR}"
+          echo "Boost: ${BOOST_CMAKE_DIR}"
+          echo "Ceres: ${CERES_CMAKE_DIR}"
+          echo "pybind11: ${PYBIND11_CMAKE_DIR}"
+          
+          # 显示更多调试信息
+          echo "Checking if CMake files exist:"
+          [ -f "${OPENCV_CMAKE_DIR}/OpenCVConfig.cmake" ] && echo "OpenCVConfig.cmake exists" || echo "OpenCVConfig.cmake not found"
+          [ -f "${EIGEN3_CMAKE_DIR}/Eigen3Config.cmake" ] && echo "Eigen3Config.cmake exists" || echo "Eigen3Config.cmake not found"
+          [ -f "${BOOST_CMAKE_DIR}/BoostConfig.cmake" ] && echo "BoostConfig.cmake exists" || echo "BoostConfig.cmake not found"
+          [ -f "${CERES_CMAKE_DIR}/CeresConfig.cmake" ] && echo "CeresConfig.cmake exists" || echo "CeresConfig.cmake not found"
+          [ -f "${PYBIND11_CMAKE_DIR}/pybind11Config.cmake" ] && echo "pybind11Config.cmake exists" || echo "pybind11Config.cmake not found"
+          
+          CMAKE_ARGS="-DCMAKE_PREFIX_PATH=/opt/homebrew;${PYBIND11_CMAKE_DIR}"
+          CMAKE_ARGS="${CMAKE_ARGS} -DCMAKE_CXX_FLAGS=-std=c++17"
+          CMAKE_ARGS="${CMAKE_ARGS} -DCMAKE_MODULE_PATH=${EIGEN3_CMAKE_DIR};${PYBIND11_CMAKE_DIR}"
+          
+          # Add dependency paths if they exist
+          [ -n "${OPENCV_CMAKE_DIR}" ] && [ -d "${OPENCV_CMAKE_DIR}" ] && CMAKE_ARGS="${CMAKE_ARGS} -DOpenCV_DIR=${OPENCV_CMAKE_DIR}"
+          [ -n "${EIGEN3_CMAKE_DIR}" ] && [ -d "${EIGEN3_CMAKE_DIR}" ] && CMAKE_ARGS="${CMAKE_ARGS} -DEigen3_DIR=${EIGEN3_CMAKE_DIR}"
+          [ -n "${BOOST_CMAKE_DIR}" ] && [ -d "${BOOST_CMAKE_DIR}" ] && CMAKE_ARGS="${CMAKE_ARGS} -DBoost_DIR=${BOOST_CMAKE_DIR}"
+          [ -n "${CERES_CMAKE_DIR}" ] && [ -d "${CERES_CMAKE_DIR}" ] && CMAKE_ARGS="${CMAKE_ARGS} -DCeres_DIR=${CERES_CMAKE_DIR}"
+          [ -n "${PYBIND11_CMAKE_DIR}" ] && [ -d "${PYBIND11_CMAKE_DIR}" ] && CMAKE_ARGS="${CMAKE_ARGS} -Dpybind11_DIR=${PYBIND11_CMAKE_DIR}"
+          
+          echo "Final CMake command: cmake ${CMAKE_ARGS} .."
+          cmake ${CMAKE_ARGS} ..
+        else
+          echo "Building on Ubuntu with detected paths..."
+          echo "pybind11: ${PYBIND11_CMAKE_DIR}"
+          
+          # 显示调试信息
+          echo "Checking if pybind11 CMake files exist:"
+          [ -f "${PYBIND11_CMAKE_DIR}/pybind11Config.cmake" ] && echo "pybind11Config.cmake exists" || echo "pybind11Config.cmake not found"
+          
+          if [ "${{ matrix.tool }}" = "visualization/pangolin_viewer" ]; then
+            cmake -DCMAKE_PREFIX_PATH="${PYBIND11_CMAKE_DIR}" \
+              -DOpenCV_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
+              -DEigen3_DIR=/usr/share/eigen3/cmake \
+              -DCeres_DIR=/usr/lib/x86_64-linux-gnu/cmake/Ceres \
+              -Dpybind11_DIR="${PYBIND11_CMAKE_DIR}" \
+              -DCMAKE_CXX_FLAGS="-std=c++17 -include cstdint" \
+              ..
+          else
+            cmake -DCMAKE_PREFIX_PATH="${PYBIND11_CMAKE_DIR}" \
+              -DOpenCV_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencv4 \
+              -DEigen3_DIR=/usr/share/eigen3/cmake \
+              -DCeres_DIR=/usr/lib/x86_64-linux-gnu/cmake/Ceres \
+              -Dpybind11_DIR="${PYBIND11_CMAKE_DIR}" \
+              -DCMAKE_CXX_FLAGS="-std=c++17" \
+              ..
+          fi
+        fi
+        if [ "${{ matrix.tool }}" = "visualization/pangolin_viewer" ]; then
+          make -j4  # Use fewer cores for pangolin to avoid memory issues
+        else
+          make -j12
+        fi
+
+    - name: Set artifact name
+      id: artifact_name
+      run: |
+        TOOL_NAME="${{ matrix.tool }}"
+        ARTIFACT_NAME="${TOOL_NAME//\//_}-${{ matrix.os }}-python${{ matrix.python-version }}"
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+          ARTIFACT_NAME="${ARTIFACT_NAME}-${VERSION}"
+        fi
+        echo "name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.artifact_name.outputs.name }}
+        path: ${{ matrix.tool }}/lib/
+
+    - name: Upload Release Assets
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: ${{ matrix.tool }}/lib/*
+        tag_name: ${{ github.ref_name }}
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
