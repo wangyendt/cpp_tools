@@ -19,8 +19,8 @@ include(FetchContent)
 # 显示FetchContent的下载进度
 set(FETCHCONTENT_QUIET OFF)
 
-list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt")
 # 注释掉可能导致冲突的系统路径
+# list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt")
 # list(APPEND CMAKE_PREFIX_PATH "/usr/local/include")
 # include_directories("/opt/homebrew/opt")
 # include_directories("/usr/local/include")
@@ -37,6 +37,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/stevenlovegrove/Pangolin.git
     GIT_TAG v0.8
     GIT_SHALLOW TRUE
+    GIT_SUBMODULES ""
 )
 
 # 设置Pangolin编译选项 - 使用和成功版本相同的配置

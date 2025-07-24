@@ -15,10 +15,11 @@ set(PYTHON_MODULE_OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 # --- Find Packages ---
 option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 
-list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt") # Add common paths for dependencies
-list(APPEND CMAKE_PREFIX_PATH "/usr/local")
-include_directories("/opt/homebrew/opt")
-include_directories("/usr/local/include")
+# The following lines are commented out to ensure conda-build uses its own environment
+# list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt") # Add common paths for dependencies
+# list(APPEND CMAKE_PREFIX_PATH "/usr/local")
+# include_directories("/opt/homebrew/opt")
+# include_directories("/usr/local/include")
 
 find_package(OpenCV 4 REQUIRED)
 find_package(Eigen3 3 REQUIRED NO_MODULE) # Use NO_MODULE for modern Eigen3 CMake config
@@ -26,6 +27,8 @@ find_package(pybind11 REQUIRED)
 # Boost is needed for shared_ptr used in the library headers
 find_package(Boost REQUIRED)
 find_package(Ceres REQUIRED)
+
+get_target_property(CERES_INCLUDE_DIRS Ceres::ceres INTERFACE_INCLUDE_DIRECTORIES)
 
 include_directories(
     ${INCLUDE_DIR}

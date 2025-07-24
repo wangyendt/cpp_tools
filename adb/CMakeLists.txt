@@ -5,10 +5,11 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_STANDARD 14)
 set(SOURCE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt")
-list(APPEND CMAKE_PREFIX_PATH "/usr/local/include")
-include_directories("/opt/homebrew/opt")
-include_directories("/usr/local/include")
+# The following lines are commented out to ensure conda-build uses its own environment
+# list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt")
+# list(APPEND CMAKE_PREFIX_PATH "/usr/local/include")
+# include_directories("/opt/homebrew/opt")
+# include_directories("/usr/local/include")
 
 find_package(pybind11 REQUIRED)
 

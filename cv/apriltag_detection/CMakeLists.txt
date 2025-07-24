@@ -14,10 +14,11 @@ else()
 endif()
 
 
-list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt")
-list(APPEND CMAKE_PREFIX_PATH "/usr/local/include")
-include_directories("/opt/homebrew/opt")
-include_directories("/usr/local/include")
+# The following lines are commented out to ensure conda-build uses its own environment
+# list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt")
+# list(APPEND CMAKE_PREFIX_PATH "/usr/local/include")
+# include_directories("/opt/homebrew/opt")
+# include_directories("/usr/local/include")
 
 find_package(OpenCV 4 REQUIRED)
 find_package(Eigen3 REQUIRED)

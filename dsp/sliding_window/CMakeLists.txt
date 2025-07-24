@@ -14,10 +14,10 @@ else()
 endif()
 
 
-list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt")
-list(APPEND CMAKE_PREFIX_PATH "/usr/local/include")
-include_directories("/opt/homebrew/opt")
-include_directories("/usr/local/include")
+# list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt")
+# list(APPEND CMAKE_PREFIX_PATH "/usr/local/include")
+# include_directories("/opt/homebrew/opt")
+# include_directories("/usr/local/include")
 
 find_package(pybind11 REQUIRED)
 
