@@ -1,5 +1,6 @@
 #include "CameraFactory.h"
 
+#include <iostream>
 #include <boost/algorithm/string.hpp>
 
 #include "CataCamera.h"
@@ -8,7 +9,6 @@
 #include "PinholeFullCamera.h"
 #include "ScaramuzzaCamera.h"
 
-#include "ceres/ceres.h"
 
 boost::shared_ptr<CameraFactory> CameraFactory::m_instance;
 

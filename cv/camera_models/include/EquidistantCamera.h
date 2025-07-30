@@ -5,7 +5,7 @@
 #include <string>
 
 #include "Camera.h"
-#include "ceres/rotation.h"
+#include "quaternion_rotation.h"
 
 /**
  * J. Kannala, and S. Brandt, A Generic Camera Model and Calibration Method
@@ -158,7 +158,7 @@ void EquidistantCamera::spaceToPlane(const T* const params, const T* const q, co
     T q_ceres[4] = {q[3], q[0], q[1], q[2]};
 
     T P_c[3];
-    ceres::QuaternionRotatePoint(q_ceres, P_w, P_c);
+    QuaternionRotatePoint(q_ceres, P_w, P_c);
 
     P_c[0] += t[0];
     P_c[1] += t[1];

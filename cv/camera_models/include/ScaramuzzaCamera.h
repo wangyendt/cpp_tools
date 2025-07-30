@@ -5,7 +5,7 @@
 #include <string>
 
 #include "Camera.h"
-#include "ceres/rotation.h"
+#include "quaternion_rotation.h"
 
 #define SCARAMUZZA_POLY_SIZE 5
 #define SCARAMUZZA_INV_POLY_SIZE 20
@@ -149,7 +149,7 @@ void OCAMCamera::spaceToPlane(const T* const params, const T* const q, const T* 
         // to Ceres convention (w, x, y, z)
         T q_ceres[4] = {q[3], q[0], q[1], q[2]};
 
-        ceres::QuaternionRotatePoint(q_ceres, P_w, P_c);
+        QuaternionRotatePoint(q_ceres, P_w, P_c);
 
         P_c[0] += t[0];
         P_c[1] += t[1];
@@ -202,7 +202,7 @@ void OCAMCamera::spaceToSphere(const T* const params, const T* const q, const T*
         // to Ceres convention (w, x, y, z)
         T q_ceres[4] = {q[3], q[0], q[1], q[2]};
 
-        ceres::QuaternionRotatePoint(q_ceres, P_w, P_c);
+        QuaternionRotatePoint(q_ceres, P_w, P_c);
 
         P_c[0] += t[0];
         P_c[1] += t[1];
