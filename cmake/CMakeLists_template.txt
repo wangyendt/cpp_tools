@@ -1,0 +1,178 @@
+# ============================================================================
+# CMakeLists.txt 模板 - 跨平台 pybind11 项目标准配置
+# ============================================================================
+# 支持平台：macOS, Linux (Ubuntu), Windows
+# 使用方法：
+#   1. 将此文件复制为 CMakeLists.txt
+#   2. 修改 project() 名称
+#   3. 修改 add_library() 中的源文件列表
+#   4. 修改 pybind11_add_module() 中的模块名和绑定文件
+# ============================================================================
+
+cmake_minimum_required(VERSION 3.10)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# ============================================================================
+# 项目配置
+# ============================================================================
+project(dsp_YOUR_PROJECT_NAME)  # 修改此处的项目名
+
+set(CMAKE_CXX_STANDARD 17)  # 或者 14, 根据需要修改
+set(SOURCE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
+if(BUILD_SHARED_LIBS)
+    set(LIBRARY_TYPE SHARED)
+else()
+    set(LIBRARY_TYPE STATIC)
+endif()
+
+# ============================================================================
+# Python 环境检测：确保使用当前激活的 Python 环境（跨平台）
+# ============================================================================
+# 方案1: 允许通过命令行参数指定 Python 路径
+if(DEFINED PYTHON_EXECUTABLE)
+    set(Python_EXECUTABLE "${PYTHON_EXECUTABLE}")
+    message(STATUS "Using Python executable from command line: ${Python_EXECUTABLE}")
+else()
+    # 方案2: 自动检测当前环境的 Python（优先使用当前激活的虚拟环境）
+    if(WIN32)
+        # Windows: 使用 where 命令
+        execute_process(
+            COMMAND where python
+            OUTPUT_VARIABLE DETECTED_PYTHON
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+    else()
+        # Unix/Linux/macOS: 使用 which 命令
+        execute_process(
+            COMMAND which python
+            OUTPUT_VARIABLE DETECTED_PYTHON
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+    endif()
+    set(Python_EXECUTABLE "${DETECTED_PYTHON}")
+    message(STATUS "Detected Python executable: ${Python_EXECUTABLE}")
+endif()
+
+# 获取 Python 版本信息
+execute_process(
+    COMMAND ${Python_EXECUTABLE} -c "import sys; print(sys.version_info[0]); print(sys.version_info[1])"
+    OUTPUT_VARIABLE PYTHON_VERSION_INFO
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+string(REPLACE "\n" ";" PYTHON_VERSION_LIST ${PYTHON_VERSION_INFO})
+list(GET PYTHON_VERSION_LIST 0 PYTHON_VERSION_MAJOR)
+list(GET PYTHON_VERSION_LIST 1 PYTHON_VERSION_MINOR)
+
+# 获取 Python 根目录
+execute_process(
+    COMMAND ${Python_EXECUTABLE} -c "import sys; print(sys.prefix)"
+    OUTPUT_VARIABLE Python_ROOT_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# 跨平台设置 Python 路径
+if(WIN32)
+    # Windows
+    set(Python_INCLUDE_DIRS "${Python_ROOT_DIR}/include")
+    set(Python_LIBRARIES "${Python_ROOT_DIR}/libs/python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR}.lib")
+elseif(APPLE)
+    # macOS
+    set(Python_INCLUDE_DIRS "${Python_ROOT_DIR}/include/python${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}")
+    set(Python_LIBRARIES "${Python_ROOT_DIR}/lib/libpython${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.dylib")
+else()
+    # Linux (Ubuntu, etc.)
+    set(Python_INCLUDE_DIRS "${Python_ROOT_DIR}/include/python${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}")
+    # 尝试多种可能的库文件位置
+    if(EXISTS "${Python_ROOT_DIR}/lib/libpython${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.so")
+        set(Python_LIBRARIES "${Python_ROOT_DIR}/lib/libpython${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.so")
+    elseif(EXISTS "${Python_ROOT_DIR}/lib/x86_64-linux-gnu/libpython${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.so")
+        set(Python_LIBRARIES "${Python_ROOT_DIR}/lib/x86_64-linux-gnu/libpython${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.so")
+    else()
+        # 让 CMake 自动查找
+        set(Python_LIBRARIES "")
+    endif()
+endif()
+
+set(CMAKE_PREFIX_PATH ${Python_ROOT_DIR} ${CMAKE_PREFIX_PATH})
+
+# 查找 Python 和 pybind11
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
+find_package(pybind11 CONFIG REQUIRED)
+
+# 打印 Python 相关信息（用于调试）
+message(STATUS "========================================")
+message(STATUS "Python Configuration:")
+message(STATUS "  Platform: ${CMAKE_SYSTEM_NAME}")
+message(STATUS "  Python_EXECUTABLE: ${Python_EXECUTABLE}")
+message(STATUS "  Python version: ${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}")
+message(STATUS "  Python_ROOT_DIR: ${Python_ROOT_DIR}")
+message(STATUS "  Python_INCLUDE_DIRS: ${Python_INCLUDE_DIRS}")
+message(STATUS "  Python_LIBRARIES: ${Python_LIBRARIES}")
+message(STATUS "========================================")
+
+# ============================================================================
+# 编译优化配置（跨平台）
+# ============================================================================
+# 设置编译类型为 Release（启用优化）
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+# 跨平台编译优化选项
+if(MSVC)
+    # Windows MSVC
+    set(OPTIMIZATION_FLAGS /O2 /DNDEBUG)
+    set(OPTIMIZATION_LINK_FLAGS /O2)
+else()
+    # GCC/Clang (Linux/macOS)
+    set(OPTIMIZATION_FLAGS -O3 -DNDEBUG -march=native -ffast-math)
+    set(OPTIMIZATION_LINK_FLAGS -O3 -flto)
+endif()
+
+# ============================================================================
+# 静态库配置
+# ============================================================================
+add_library(
+	dsp_YOUR_PROJECT_NAME  # 修改此处的库名
+	STATIC
+	# 在下面添加你的源文件
+	src/your_source_file.cpp
+	)
+
+target_include_directories(
+	dsp_YOUR_PROJECT_NAME  # 修改此处的库名
+	PUBLIC
+	${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+# 为静态库添加优化选项
+target_compile_options(dsp_YOUR_PROJECT_NAME PRIVATE ${OPTIMIZATION_FLAGS})
+
+set_target_properties(
+    dsp_YOUR_PROJECT_NAME  # 修改此处的库名
+    PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+
+# ============================================================================
+# Python 模块配置
+# ============================================================================
+pybind11_add_module(your_module_name your_pybind_file.cpp)  # 修改模块名和绑定文件名
+
+target_link_libraries(
+	your_module_name  # 修改此处的模块名
+	PRIVATE
+	dsp_YOUR_PROJECT_NAME)  # 修改此处的库名
+
+# 为 Python 模块添加优化选项
+target_compile_options(your_module_name PRIVATE ${OPTIMIZATION_FLAGS})
+if(NOT MSVC)
+    target_link_options(your_module_name PRIVATE ${OPTIMIZATION_LINK_FLAGS})
+endif()
+
+set_target_properties(
+	your_module_name  # 修改此处的模块名
+	PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib)

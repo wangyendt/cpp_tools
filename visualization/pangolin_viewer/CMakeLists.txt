@@ -25,6 +25,12 @@ set(FETCHCONTENT_QUIET OFF)
 # include_directories("/opt/homebrew/opt")
 # include_directories("/usr/local/include")
 
+# ============================================================================
+# 跨平台 Python 环境检测和编译优化
+# ============================================================================
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/FindPythonCrossplatform.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/OptimizationFlags.cmake)
+
 find_package(pybind11 REQUIRED)
 find_package(OpenCV 4 REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -107,6 +113,10 @@ target_include_directories(
     ${OpenCV_INCLUDE_DIRS}
     ${OPENGL_INCLUDE_DIR}
     ${PANGOLIN_INCLUDE_DIRS})
+
+# 添加优化选项到静态库
+target_compile_options(pangolin_viewer_lib PRIVATE ${OPTIMIZATION_FLAGS})
+
 set_target_properties(
     pangolin_viewer_lib 
     PROPERTIES
@@ -121,6 +131,13 @@ target_link_libraries(
     pangolin_viewer
     PRIVATE
     pangolin_viewer_lib)
+
+# 添加优化选项到 Python 模块
+target_compile_options(pangolin_viewer PRIVATE ${OPTIMIZATION_FLAGS})
+if(NOT MSVC)
+    target_link_options(pangolin_viewer PRIVATE ${OPTIMIZATION_LINK_FLAGS})
+endif()
+
 set_target_properties(
     pangolin_viewer 
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY

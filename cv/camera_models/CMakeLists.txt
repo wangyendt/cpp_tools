@@ -21,6 +21,12 @@ option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 # include_directories("/opt/homebrew/opt")
 # include_directories("/usr/local/include")
 
+# ============================================================================
+# 跨平台 Python 环境检测和编译优化
+# ============================================================================
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/FindPythonCrossplatform.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/OptimizationFlags.cmake)
+
 find_package(OpenCV 4 REQUIRED)
 find_package(Eigen3 3 REQUIRED NO_MODULE) # Use NO_MODULE for modern Eigen3 CMake config
 find_package(pybind11 REQUIRED)
@@ -43,6 +49,9 @@ include_directories(
 file(GLOB SRC_FILES ${SOURCE_DIR}/*.cpp)
 
 add_library(camera_models_lib ${SRC_FILES})
+# 添加优化选项到静态库
+target_compile_options(camera_models_lib PRIVATE ${OPTIMIZATION_FLAGS})
+
 set_target_properties(camera_models_lib PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
@@ -71,6 +80,12 @@ target_link_libraries(camera_models PRIVATE
 )
 # Include directories already set globally, but could be set per target
 # target_include_directories(camera_models PRIVATE ...)
+
+# 添加优化选项到 Python 模块
+target_compile_options(camera_models PRIVATE ${OPTIMIZATION_FLAGS})
+if(NOT MSVC)
+    target_link_options(camera_models PRIVATE ${OPTIMIZATION_LINK_FLAGS})
+endif()
 
 set_target_properties(camera_models PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${PYTHON_MODULE_OUTPUT_DIR}

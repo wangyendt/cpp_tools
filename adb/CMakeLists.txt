@@ -11,6 +11,12 @@ set(SOURCE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/src)
 # include_directories("/opt/homebrew/opt")
 # include_directories("/usr/local/include")
 
+# ============================================================================
+# 跨平台 Python 环境检测和编译优化
+# ============================================================================
+include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/FindPythonCrossplatform.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/OptimizationFlags.cmake)
+
 find_package(pybind11 REQUIRED)
 
 pybind11_add_module(adb_logcat_reader adb_logcat_reader_pybind.cpp)
@@ -19,6 +25,13 @@ target_include_directories(
 	PRIVATE
 	${SOURCE_ROOT}
 )
+
+# 添加优化选项
+target_compile_options(adb_logcat_reader PRIVATE ${OPTIMIZATION_FLAGS})
+if(NOT MSVC)
+    target_link_options(adb_logcat_reader PRIVATE ${OPTIMIZATION_LINK_FLAGS})
+endif()
+
 set_target_properties(
 	adb_logcat_reader
 	PROPERTIES LIBRARY_OUTPUT_DIRECTORY

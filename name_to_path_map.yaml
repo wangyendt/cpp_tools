@@ -14,6 +14,10 @@ sliding_window_dsp:
   path: dsp/sliding_window
   buildable: true
   installable: false
+butterworth_filter:
+  path: dsp/butterworth_filter
+  buildable: true
+  installable: false
 adb_logcat_reader:
   path: adb
   buildable: true

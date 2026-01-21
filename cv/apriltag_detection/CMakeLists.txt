@@ -20,6 +20,12 @@ endif()
 # include_directories("/opt/homebrew/opt")
 # include_directories("/usr/local/include")
 
+# ============================================================================
+# 跨平台 Python 环境检测和编译优化
+# ============================================================================
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/FindPythonCrossplatform.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/OptimizationFlags.cmake)
+
 find_package(OpenCV 4 REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(pybind11 REQUIRED)
@@ -46,6 +52,13 @@ target_include_directories(apriltag_detection PRIVATE
     ${OpenCV_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIR}
 )
+
+# 添加优化选项
+target_compile_options(apriltag_detection PRIVATE ${OPTIMIZATION_FLAGS})
+if(NOT MSVC)
+    target_link_options(apriltag_detection PRIVATE ${OPTIMIZATION_LINK_FLAGS})
+endif()
+
 set_target_properties(apriltag_detection PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib
 )
