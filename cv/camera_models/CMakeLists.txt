@@ -15,17 +15,81 @@ set(PYTHON_MODULE_OUTPUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib)
 # --- Find Packages ---
 option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 
-# The following lines are commented out to ensure conda-build uses its own environment
-# list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt") # Add common paths for dependencies
-# list(APPEND CMAKE_PREFIX_PATH "/usr/local")
-# include_directories("/opt/homebrew/opt")
-# include_directories("/usr/local/include")
+# ============================================================================
+# 跨平台 Python 环境检测（自包含版本）
+# ============================================================================
+if(DEFINED PYTHON_EXECUTABLE)
+    set(Python_EXECUTABLE "${PYTHON_EXECUTABLE}")
+    message(STATUS "Using Python executable from command line: ${Python_EXECUTABLE}")
+else()
+    if(WIN32)
+        execute_process(COMMAND where python OUTPUT_VARIABLE DETECTED_PYTHON OUTPUT_STRIP_TRAILING_WHITESPACE)
+    else()
+        execute_process(COMMAND which python OUTPUT_VARIABLE DETECTED_PYTHON OUTPUT_STRIP_TRAILING_WHITESPACE)
+    endif()
+    set(Python_EXECUTABLE "${DETECTED_PYTHON}")
+    message(STATUS "Detected Python executable: ${Python_EXECUTABLE}")
+endif()
+
+execute_process(
+    COMMAND ${Python_EXECUTABLE} -c "import sys; print(sys.version_info[0]); print(sys.version_info[1])"
+    OUTPUT_VARIABLE PYTHON_VERSION_INFO OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+string(REPLACE "\n" ";" PYTHON_VERSION_LIST ${PYTHON_VERSION_INFO})
+list(GET PYTHON_VERSION_LIST 0 PYTHON_VERSION_MAJOR)
+list(GET PYTHON_VERSION_LIST 1 PYTHON_VERSION_MINOR)
+
+execute_process(
+    COMMAND ${Python_EXECUTABLE} -c "import sys; print(sys.prefix)"
+    OUTPUT_VARIABLE Python_ROOT_DIR OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+if(WIN32)
+    set(Python_INCLUDE_DIRS "${Python_ROOT_DIR}/include")
+    set(Python_LIBRARIES "${Python_ROOT_DIR}/libs/python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR}.lib")
+elseif(APPLE)
+    set(Python_INCLUDE_DIRS "${Python_ROOT_DIR}/include/python${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}")
+    set(Python_LIBRARIES "${Python_ROOT_DIR}/lib/libpython${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.dylib")
+else()
+    set(Python_INCLUDE_DIRS "${Python_ROOT_DIR}/include/python${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}")
+    if(EXISTS "${Python_ROOT_DIR}/lib/libpython${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.so")
+        set(Python_LIBRARIES "${Python_ROOT_DIR}/lib/libpython${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.so")
+    elseif(EXISTS "${Python_ROOT_DIR}/lib/x86_64-linux-gnu/libpython${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.so")
+        set(Python_LIBRARIES "${Python_ROOT_DIR}/lib/x86_64-linux-gnu/libpython${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.so")
+    elseif(EXISTS "${Python_ROOT_DIR}/lib/aarch64-linux-gnu/libpython${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.so")
+        set(Python_LIBRARIES "${Python_ROOT_DIR}/lib/aarch64-linux-gnu/libpython${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}.so")
+    else()
+        set(Python_LIBRARIES "")
+    endif()
+endif()
+
+set(CMAKE_PREFIX_PATH ${Python_ROOT_DIR} ${CMAKE_PREFIX_PATH})
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
+
+message(STATUS "========================================")
+message(STATUS "Python Configuration:")
+message(STATUS "  Platform: ${CMAKE_SYSTEM_NAME}")
+message(STATUS "  Python_EXECUTABLE: ${Python_EXECUTABLE}")
+message(STATUS "  Python version: ${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}")
+message(STATUS "  Python_ROOT_DIR: ${Python_ROOT_DIR}")
+message(STATUS "========================================")
 
 # ============================================================================
-# 跨平台 Python 环境检测和编译优化
+# 编译优化配置（自包含版本）
 # ============================================================================
-include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/FindPythonCrossplatform.cmake)
-include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/OptimizationFlags.cmake)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+if(MSVC)
+    set(OPTIMIZATION_FLAGS /O2 /DNDEBUG)
+    set(OPTIMIZATION_LINK_FLAGS /O2)
+else()
+    set(OPTIMIZATION_FLAGS -O3 -DNDEBUG -march=native -ffast-math)
+    set(OPTIMIZATION_LINK_FLAGS -O3 -flto)
+endif()
+message(STATUS "Optimization flags: ${OPTIMIZATION_FLAGS}")
 
 find_package(OpenCV 4 REQUIRED)
 find_package(Eigen3 3 REQUIRED NO_MODULE) # Use NO_MODULE for modern Eigen3 CMake config
