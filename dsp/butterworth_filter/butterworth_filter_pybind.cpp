@@ -65,22 +65,26 @@ PYBIND11_MODULE(butterworth_filter, m) {
     // ----- ButterworthFilter -----
     py::class_<ButterworthFilter>(m, "ButterworthFilter")
         .def(py::init<const std::vector<double>&, const std::vector<double>&, bool>(),
-             py::arg("b"), py::arg("a"), py::arg("precompute") = true)
+             py::arg("b"), py::arg("a"), py::arg("cache_zi") = true)
+
+        // ========== factory methods ==========
+        .def_static("from_ba",
+                    &ButterworthFilter::from_ba,
+                    py::arg("b"),
+                    py::arg("a"),
+                    py::arg("cache_zi") = true,
+                    "Create filter from b and a coefficients")
+
+        .def_static("from_params",
+                    &ButterworthFilter::from_params,
+                    py::arg("order"),
+                    py::arg("fs"),
+                    py::arg("btype"),
+                    py::arg("cutoff"),
+                    py::arg("cache_zi") = true,
+                    "Create Butterworth filter from parameters")
 
         // ========== numpy zero-copy main APIs ==========
-        .def("filter",
-             [](const ButterworthFilter& self,
-                const py::array& x,
-                ButterworthFilter::PadType padtype,
-                int padlen) {
-                 auto [ptr, n] = as_ptr_len_1d(x);
-                 auto y = self.filter(ptr, n, padtype, padlen);
-                 return vec_to_ndarray(std::move(y));
-             },
-             py::arg("x"),
-             py::arg("padtype") = ButterworthFilter::PadType::Odd,
-             py::arg("padlen") = -1)
-
         .def("filtfilt",
              [](const ButterworthFilter& self,
                 const py::array& x,
@@ -129,17 +133,6 @@ PYBIND11_MODULE(butterworth_filter, m) {
              })
 
         // ========== list compatibility (will copy) ==========
-        .def("filter_list",
-             [](const ButterworthFilter& self,
-                const std::vector<double>& x,
-                ButterworthFilter::PadType padtype,
-                int padlen) {
-                 return self.filter(x, padtype, padlen);
-             },
-             py::arg("x"),
-             py::arg("padtype") = ButterworthFilter::PadType::Odd,
-             py::arg("padlen") = -1)
-
         .def("filtfilt_list",
              [](const ButterworthFilter& self,
                 const std::vector<double>& x,

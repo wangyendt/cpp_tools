@@ -26,7 +26,7 @@ print("=" * 80)
 # 4阶低通滤波器，截止频率 0.125 (归一化频率)
 order = 4
 Wn = 0.125
-b, a = signal.butter(order, Wn, btype='low', analog=False)
+b, a = signal.butter(order, Wn, btype='low', analog=False, fs=1.0)
 
 print(f"\n滤波器参数:")
 print(f"阶数: {order}")
@@ -36,6 +36,7 @@ print(f"a 系数: {a}")
 
 # 创建 pybind 滤波器对象
 filt_cpp = butterworth_filter.ButterworthFilter(b.tolist(), a.tolist())
+filt_cpp = butterworth_filter.ButterworthFilter.from_params(order, 1.0, 'lowpass', [Wn])
 
 # 创建测试信号：正弦波 + 高频噪声
 np.random.seed(42)  # 固定随机种子以便复现
@@ -122,3 +123,12 @@ print("=" * 80)
 print(f"filtfilt: C++ 比 SciPy 快 {t_scipy/t_cpp:.2f}x, 最大误差 {max_error:.2e}")
 print(f"lfilter:  C++ 比 SciPy 快 {t_scipy_lf/t_cpp_lf:.2f}x, 最大误差 {max_error_lf:.2e}")
 print("=" * 80)
+
+# import  matplotlib.pyplot as plt
+# plt.figure()
+# plt.plot(filtered_scipy, linewidth=4)
+# plt.plot(filtered_cpp)
+# plt.figure()
+# plt.plot(filtered_scipy_lf, linewidth=4)
+# plt.plot(filtered_cpp_lf)
+# plt.show()

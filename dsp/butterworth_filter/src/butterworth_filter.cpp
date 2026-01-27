@@ -1,6 +1,7 @@
 #include "butterworth_filter.h"
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <stdexcept>
 
 namespace {
@@ -66,8 +67,8 @@ static std::vector<double> solve_linear(const std::vector<double>& A,
 
 ButterworthFilter::ButterworthFilter(const std::vector<double>& b,
                                      const std::vector<double>& a,
-                                     bool precompute)
-: precompute_(precompute) {
+                                     bool cache_zi)
+: precompute_(cache_zi) {
     k_.b = b;
     k_.a = a;
     normalize_ba(k_.b, k_.a);
@@ -78,13 +79,24 @@ ButterworthFilter::ButterworthFilter(const std::vector<double>& b,
     }
 }
 
-// ---------------- public APIs (vector) ----------------
+// ---------------- factory methods ----------------
 
-std::vector<double> ButterworthFilter::filter(const std::vector<double>& x,
-                                              PadType padtype,
-                                              int padlen) const {
-    return filtfilt(x, padtype, padlen);
+ButterworthFilter ButterworthFilter::from_ba(const std::vector<double>& b,
+                                             const std::vector<double>& a,
+                                             bool cache_zi) {
+    return ButterworthFilter(b, a, cache_zi);
 }
+
+ButterworthFilter ButterworthFilter::from_params(int order,
+                                                 double fs,
+                                                 const std::string& btype,
+                                                 const std::vector<double>& cutoff,
+                                                 bool cache_zi) {
+    auto [b, a] = butter_ba(order, fs, btype, cutoff);
+    return ButterworthFilter(b, a, cache_zi);
+}
+
+// ---------------- public APIs (vector) ----------------
 
 std::vector<double> ButterworthFilter::filtfilt(const std::vector<double>& x,
                                                 PadType padtype,
@@ -103,11 +115,6 @@ std::vector<double> ButterworthFilter::detrend(const std::vector<double>& x) con
 }
 
 // ---------------- public APIs (ptr) ----------------
-
-std::vector<double> ButterworthFilter::filter(const double* x, size_t n,
-                                              PadType padtype, int padlen) const {
-    return filtfilt(x, n, padtype, padlen);
-}
 
 std::vector<double> ButterworthFilter::filtfilt(const double* x, size_t n,
                                                 PadType padtype, int padlen) const {
@@ -356,4 +363,273 @@ ButterworthFilter::filtfilt(const Kernel& k, const double* x, size_t n,
 
     if (edge == 0) return y2;
     return std::vector<double>(y2.begin() + edge, y2.end() - edge);
+}
+
+// ============================================================
+//              Butterworth design implementation
+// ============================================================
+
+std::vector<double> ButterworthFilter::poly(const std::vector<std::complex<double>>& roots) {
+    // Compute polynomial coefficients from roots
+    const int n = (int)roots.size();
+    std::vector<std::complex<double>> coeffs(n + 1, 0.0);
+    coeffs[0] = 1.0;
+    
+    for (int i = 0; i < n; ++i) {
+        for (int j = i + 1; j > 0; --j) {
+            coeffs[j] = coeffs[j] - roots[i] * coeffs[j - 1];
+        }
+    }
+    
+    // Convert to real (imaginary parts should be negligible)
+    std::vector<double> result(n + 1);
+    for (int i = 0; i <= n; ++i) {
+        result[i] = std::real(coeffs[i]);
+    }
+    return result;
+}
+
+ButterworthFilter::ComplexPair ButterworthFilter::buttap_zp(int n) {
+    // Butterworth analog lowpass prototype: no finite zeros
+    ComplexPair zp;
+    zp.p.resize(n);
+    
+    const double pi = M_PI;
+    for (int k = 0; k < n; ++k) {
+        double angle = pi * (2.0 * k + n + 1.0) / (2.0 * n);
+        zp.p[k] = std::exp(std::complex<double>(0.0, angle));
+    }
+    
+    return zp;
+}
+
+ButterworthFilter::ComplexPair ButterworthFilter::lp2lp_zp(const ComplexPair& zp, double wo) {
+    ComplexPair result;
+    result.z.resize(zp.z.size());
+    result.p.resize(zp.p.size());
+    
+    for (size_t i = 0; i < zp.z.size(); ++i) {
+        result.z[i] = zp.z[i] * wo;
+    }
+    for (size_t i = 0; i < zp.p.size(); ++i) {
+        result.p[i] = zp.p[i] * wo;
+    }
+    
+    return result;
+}
+
+ButterworthFilter::ComplexPair ButterworthFilter::lp2hp_zp(const ComplexPair& zp, double wo) {
+    ComplexPair result;
+    const int degree = (int)zp.p.size() - (int)zp.z.size();
+    
+    // Transform existing zeros
+    for (size_t i = 0; i < zp.z.size(); ++i) {
+        result.z.push_back(wo / zp.z[i]);
+    }
+    
+    // Transform poles
+    for (size_t i = 0; i < zp.p.size(); ++i) {
+        result.p.push_back(wo / zp.p[i]);
+    }
+    
+    // Add zeros at origin for degree > 0
+    for (int i = 0; i < degree; ++i) {
+        result.z.push_back(0.0);
+    }
+    
+    return result;
+}
+
+ButterworthFilter::ComplexPair ButterworthFilter::lp2bp_zp(const ComplexPair& zp, double wo, double bw) {
+    ComplexPair result;
+    const int degree = (int)zp.p.size() - (int)zp.z.size();
+    
+    // Transform zeros
+    for (size_t i = 0; i < zp.z.size(); ++i) {
+        std::complex<double> t = 0.5 * bw * zp.z[i];
+        std::complex<double> r = std::sqrt(t * t - wo * wo);
+        result.z.push_back(t + r);
+        result.z.push_back(t - r);
+    }
+    
+    // Transform poles
+    for (size_t i = 0; i < zp.p.size(); ++i) {
+        std::complex<double> t = 0.5 * bw * zp.p[i];
+        std::complex<double> r = std::sqrt(t * t - wo * wo);
+        result.p.push_back(t + r);
+        result.p.push_back(t - r);
+    }
+    
+    // Add zeros at origin for degree > 0
+    for (int i = 0; i < degree; ++i) {
+        result.z.push_back(0.0);
+    }
+    
+    return result;
+}
+
+ButterworthFilter::ComplexPair ButterworthFilter::lp2bs_zp(const ComplexPair& zp, double wo, double bw) {
+    ComplexPair result;
+    const int degree = (int)zp.p.size() - (int)zp.z.size();
+    
+    // Transform zeros
+    for (size_t i = 0; i < zp.z.size(); ++i) {
+        std::complex<double> t = 0.5 * bw / zp.z[i];
+        std::complex<double> r = std::sqrt(t * t - wo * wo);
+        result.z.push_back(t + r);
+        result.z.push_back(t - r);
+    }
+    
+    // Transform poles
+    for (size_t i = 0; i < zp.p.size(); ++i) {
+        std::complex<double> t = 0.5 * bw / zp.p[i];
+        std::complex<double> r = std::sqrt(t * t - wo * wo);
+        result.p.push_back(t + r);
+        result.p.push_back(t - r);
+    }
+    
+    // Add zeros at +/- j*wo for degree > 0
+    for (int i = 0; i < degree; ++i) {
+        result.z.push_back(std::complex<double>(0.0, wo));
+        result.z.push_back(std::complex<double>(0.0, -wo));
+    }
+    
+    return result;
+}
+
+ButterworthFilter::ComplexPair ButterworthFilter::bilinear_zp(const ComplexPair& zp, double fs) {
+    ComplexPair result;
+    const double fs2 = 2.0 * fs;
+    const int degree = (int)zp.p.size() - (int)zp.z.size();
+    
+    // Transform zeros
+    for (size_t i = 0; i < zp.z.size(); ++i) {
+        result.z.push_back((fs2 + zp.z[i]) / (fs2 - zp.z[i]));
+    }
+    
+    // Transform poles
+    for (size_t i = 0; i < zp.p.size(); ++i) {
+        result.p.push_back((fs2 + zp.p[i]) / (fs2 - zp.p[i]));
+    }
+    
+    // Zeros at infinity -> z = -1
+    for (int i = 0; i < degree; ++i) {
+        result.z.push_back(-1.0);
+    }
+    
+    return result;
+}
+
+std::vector<double> ButterworthFilter::normalize_passband_gain(const std::vector<double>& b,
+                                                               const std::vector<double>& a,
+                                                               double w) {
+    // Compute H(e^{jw}) = sum(b * e^{-jwk}) / sum(a * e^{-jwk})
+    std::complex<double> num(0.0, 0.0);
+    std::complex<double> den(0.0, 0.0);
+    
+    for (size_t k = 0; k < b.size(); ++k) {
+        std::complex<double> ej = std::exp(std::complex<double>(0.0, -w * (double)k));
+        num += b[k] * ej;
+    }
+    
+    for (size_t k = 0; k < a.size(); ++k) {
+        std::complex<double> ej = std::exp(std::complex<double>(0.0, -w * (double)k));
+        den += a[k] * ej;
+    }
+    
+    std::complex<double> H = num / den;
+    double gain = 1.0 / (std::abs(H) + 1e-30);
+    
+    std::vector<double> b_norm(b.size());
+    for (size_t i = 0; i < b.size(); ++i) {
+        b_norm[i] = b[i] * gain;
+    }
+    
+    return b_norm;
+}
+
+std::pair<std::vector<double>, std::vector<double>>
+ButterworthFilter::butter_ba(int order, double fs, const std::string& btype, const std::vector<double>& cutoff) {
+    if (order <= 0) {
+        throw std::invalid_argument("order must be positive");
+    }
+    if (fs <= 0.0) {
+        throw std::invalid_argument("fs must be > 0");
+    }
+    
+    const double fs2 = 2.0 * fs;
+    const double pi = M_PI;
+    
+    // Prewarp function
+    auto prewarp = [&](double f_hz) {
+        if (f_hz <= 0.0 || f_hz >= 0.5 * fs) {
+            throw std::invalid_argument("cutoff must satisfy 0 < f < fs/2");
+        }
+        return fs2 * std::tan(pi * f_hz / fs);
+    };
+    
+    // 1) Analog prototype (wc=1 rad/s)
+    ComplexPair zp = buttap_zp(order);
+    
+    // 2) Analog frequency transform
+    double w_norm = 0.0;
+    
+    if (btype == "lowpass" || btype == "highpass") {
+        if (cutoff.size() != 1) {
+            throw std::invalid_argument("lowpass/highpass requires single cutoff frequency");
+        }
+        double wc = prewarp(cutoff[0]);
+        
+        if (btype == "lowpass") {
+            zp = lp2lp_zp(zp, wc);
+            w_norm = 0.0;
+        } else {
+            zp = lp2hp_zp(zp, wc);
+            w_norm = pi;
+        }
+    } else if (btype == "bandpass" || btype == "bandstop") {
+        if (cutoff.size() != 2) {
+            throw std::invalid_argument("bandpass/bandstop requires two cutoff frequencies");
+        }
+        double w1 = prewarp(cutoff[0]);
+        double w2 = prewarp(cutoff[1]);
+        
+        if (w2 <= w1) {
+            throw std::invalid_argument("band cutoff must satisfy low < high");
+        }
+        
+        double w0 = std::sqrt(w1 * w2);
+        double bw = w2 - w1;
+        
+        if (btype == "bandpass") {
+            zp = lp2bp_zp(zp, w0, bw);
+            w_norm = 2.0 * std::atan(w0 / fs2);
+        } else {
+            zp = lp2bs_zp(zp, w0, bw);
+            w_norm = 0.0;
+        }
+    } else {
+        throw std::invalid_argument("btype must be one of: lowpass/highpass/bandpass/bandstop");
+    }
+    
+    // 3) Bilinear transform (analog -> digital)
+    zp = bilinear_zp(zp, fs);
+    
+    // 4) zpk -> ba
+    std::vector<double> b = poly(zp.z);
+    std::vector<double> a = poly(zp.p);
+    
+    // Normalize a[0] = 1
+    if (a.empty() || a[0] == 0.0) {
+        throw std::runtime_error("butter_ba: invalid denominator");
+    }
+    
+    double a0 = a[0];
+    for (size_t i = 0; i < b.size(); ++i) b[i] /= a0;
+    for (size_t i = 0; i < a.size(); ++i) a[i] /= a0;
+    
+    // 5) Normalize passband gain
+    b = normalize_passband_gain(b, a, w_norm);
+    
+    return {b, a};
 }
