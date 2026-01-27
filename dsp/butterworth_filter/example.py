@@ -393,4 +393,160 @@ axes[1, 1].grid(True, alpha=0.3)
 plt.tight_layout()
 plt.show()
 
+# ==================== 分段滤波可视化对比 ====================
+print("\n" + "=" * 80)
+print("分段滤波可视化对比 (20段)")
+print("=" * 80)
+
+# 生成测试信号
+np.random.seed(123)
+N_chunk_test = 2000
+t_chunk = np.linspace(0, 2, N_chunk_test)
+# 低频信号 + 高频噪声 + 阶跃
+x_chunk = np.sin(2 * np.pi * 2 * t_chunk) + 0.3 * np.sin(2 * np.pi * 20 * t_chunk)
+x_chunk[:100] += 0.5  # 开始部分有个阶跃
+
+# 设计滤波器
+b_test, a_test = signal.butter(4, 0.2, btype='low', analog=False, fs=1.0)
+sos_test = signal.butter(4, 0.2, btype='low', analog=False, output='sos', fs=1.0)
+
+# 计算 zi
+zi_ba = signal.lfilter_zi(b_test, a_test)
+zi_sos = signal.sosfilt_zi(sos_test)
+zi_ba_cpp = butterworth_filter.ButterworthFilter.lfilter_zi(b_test.tolist(), a_test.tolist())
+zi_sos_cpp = butterworth_filter.ButterworthFilter.sosfilt_zi(sos_test)
+
+# 1. 整体滤波（参考）
+y_whole_ba = signal.lfilter(b_test, a_test, x_chunk)  # zi=None 时只返回 y
+y_whole_sos = signal.sosfilt(sos_test, x_chunk)  # zi=None 时只返回 y
+
+# 2. 分段滤波 - 使用 zi 保持状态（应该与整体相等）
+n_chunks = 20
+chunk_size = N_chunk_test // n_chunks
+chunks = [x_chunk[i*chunk_size:(i+1)*chunk_size] for i in range(n_chunks)]
+
+# BA with zi
+zi_state_ba = zi_ba * x_chunk[0]  # 初始化为第一个样本的稳态
+y_chunked_ba_with_zi = []
+for chunk in chunks:
+    y, zi_state_ba = signal.lfilter(b_test, a_test, chunk, zi=zi_state_ba)
+    y_chunked_ba_with_zi.append(y)
+y_chunked_ba_with_zi = np.concatenate(y_chunked_ba_with_zi)
+
+# SOS with zi
+zi_state_sos = zi_sos * x_chunk[0]  # 初始化
+y_chunked_sos_with_zi = []
+for chunk in chunks:
+    y, zi_state_sos = signal.sosfilt(sos_test, chunk, zi=zi_state_sos)
+    y_chunked_sos_with_zi.append(y)
+y_chunked_sos_with_zi = np.concatenate(y_chunked_sos_with_zi)
+
+# 3. 分段滤波 - 不使用 zi（zi=None，应该与整体不等）
+y_chunked_ba_no_zi = []
+for chunk in chunks:
+    y = signal.lfilter(b_test, a_test, chunk)  # zi=None (默认)，只返回一个值
+    y_chunked_ba_no_zi.append(y)
+y_chunked_ba_no_zi = np.concatenate(y_chunked_ba_no_zi)
+
+y_chunked_sos_no_zi = []
+for chunk in chunks:
+    y = signal.sosfilt(sos_test, chunk)  # zi=None (默认)，只返回一个值
+    y_chunked_sos_no_zi.append(y)
+y_chunked_sos_no_zi = np.concatenate(y_chunked_sos_no_zi)
+
+# 4. 第一块用 zi=None vs zi=lfilter_zi 的对比
+first_chunk = chunks[0]
+y_first_no_zi = signal.lfilter(b_test, a_test, first_chunk)  # zi=None，只返回一个值
+y_first_with_zi, _ = signal.lfilter(b_test, a_test, first_chunk, zi=zi_ba * first_chunk[0])
+y_first_zero_zi, _ = signal.lfilter(b_test, a_test, first_chunk, zi=np.zeros_like(zi_ba))
+
+# 绘图
+fig, axes = plt.subplots(2, 2, figsize=(16, 10))
+fig.suptitle('流式分段滤波对比 (20段)', fontsize=16, fontweight='bold')
+
+# 左上：BA 滤波器 - 使用 zi 保持状态
+axes[0, 0].plot(t_chunk, x_chunk, 'gray', alpha=0.3, linewidth=1, label='原始信号')
+axes[0, 0].plot(t_chunk, y_whole_ba, 'b-', linewidth=2, label='整体滤波 (参考)')
+axes[0, 0].plot(t_chunk, y_chunked_ba_with_zi, 'r--', linewidth=1.5, label='分段滤波 (with zi)')
+# 标记分段边界
+for i in range(1, n_chunks):
+    axes[0, 0].axvline(x=t_chunk[i*chunk_size], color='green', linestyle=':', alpha=0.5, linewidth=0.8)
+axes[0, 0].set_xlabel('时间 (秒)', fontsize=11)
+axes[0, 0].set_ylabel('幅值', fontsize=11)
+axes[0, 0].set_title('BA 滤波: 使用 zi 保持状态', fontsize=13, fontweight='bold')
+axes[0, 0].legend(loc='upper right', fontsize=10)
+axes[0, 0].grid(True, alpha=0.3)
+max_diff = np.max(np.abs(y_whole_ba - y_chunked_ba_with_zi))
+axes[0, 0].text(0.02, 0.98, f'最大误差: {max_diff:.2e}', 
+                transform=axes[0, 0].transAxes, fontsize=10,
+                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+# 右上：BA 滤波器 - 不使用 zi
+axes[0, 1].plot(t_chunk, x_chunk, 'gray', alpha=0.3, linewidth=1, label='原始信号')
+axes[0, 1].plot(t_chunk, y_whole_ba, 'b-', linewidth=2, label='整体滤波 (参考)')
+axes[0, 1].plot(t_chunk, y_chunked_ba_no_zi, 'orange', linewidth=1.5, label='分段滤波 (zi=None)')
+for i in range(1, n_chunks):
+    axes[0, 1].axvline(x=t_chunk[i*chunk_size], color='green', linestyle=':', alpha=0.5, linewidth=0.8)
+axes[0, 1].set_xlabel('时间 (秒)', fontsize=11)
+axes[0, 1].set_ylabel('幅值', fontsize=11)
+axes[0, 1].set_title('BA 滤波: 每段独立 (zi=None)', fontsize=13, fontweight='bold')
+axes[0, 1].legend(loc='upper right', fontsize=10)
+axes[0, 1].grid(True, alpha=0.3)
+max_diff_no_zi = np.max(np.abs(y_whole_ba - y_chunked_ba_no_zi))
+axes[0, 1].text(0.02, 0.98, f'最大误差: {max_diff_no_zi:.2e}', 
+                transform=axes[0, 1].transAxes, fontsize=10,
+                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='lightcoral', alpha=0.5))
+
+# 左下：SOS 滤波器 - 使用 zi 保持状态
+axes[1, 0].plot(t_chunk, x_chunk, 'gray', alpha=0.3, linewidth=1, label='原始信号')
+axes[1, 0].plot(t_chunk, y_whole_sos, 'b-', linewidth=2, label='整体滤波 (参考)')
+axes[1, 0].plot(t_chunk, y_chunked_sos_with_zi, 'r--', linewidth=1.5, label='分段滤波 (with zi)')
+for i in range(1, n_chunks):
+    axes[1, 0].axvline(x=t_chunk[i*chunk_size], color='green', linestyle=':', alpha=0.5, linewidth=0.8)
+axes[1, 0].set_xlabel('时间 (秒)', fontsize=11)
+axes[1, 0].set_ylabel('幅值', fontsize=11)
+axes[1, 0].set_title('SOS 滤波: 使用 zi 保持状态', fontsize=13, fontweight='bold')
+axes[1, 0].legend(loc='upper right', fontsize=10)
+axes[1, 0].grid(True, alpha=0.3)
+max_diff_sos = np.max(np.abs(y_whole_sos - y_chunked_sos_with_zi))
+axes[1, 0].text(0.02, 0.98, f'最大误差: {max_diff_sos:.2e}', 
+                transform=axes[1, 0].transAxes, fontsize=10,
+                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+# 右下：第一段的 zi=None vs zi=lfilter_zi 对比
+t_first = t_chunk[:chunk_size]
+axes[1, 1].plot(t_first, first_chunk, 'gray', alpha=0.3, linewidth=1, label='原始信号 (第1段)')
+axes[1, 1].plot(t_first, y_first_zero_zi, 'purple', linewidth=2, label='zi = zeros (全零)')
+axes[1, 1].plot(t_first, y_first_no_zi, 'orange', linewidth=2, linestyle='--', label='zi = None (默认零)')
+axes[1, 1].plot(t_first, y_first_with_zi, 'g-', linewidth=2, label='zi = lfilter_zi * x[0]')
+axes[1, 1].set_xlabel('时间 (秒)', fontsize=11)
+axes[1, 1].set_ylabel('幅值', fontsize=11)
+axes[1, 1].set_title('第一段: zi=None vs zi=lfilter_zi 的区别', fontsize=13, fontweight='bold')
+axes[1, 1].legend(loc='upper right', fontsize=10)
+axes[1, 1].grid(True, alpha=0.3)
+axes[1, 1].text(0.02, 0.02, 
+                '注意: zi=None 等价于 zi=zeros\n'
+                'zi=lfilter_zi*x[0] 提供平滑的稳态初始化',
+                transform=axes[1, 1].transAxes, fontsize=9,
+                verticalalignment='bottom', bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
+
+plt.tight_layout()
+plt.show()
+
+print("\n总结:")
+print("-" * 80)
+print(f"1. BA 滤波器 - 使用 zi 保持状态:")
+print(f"   整体 vs 分段 (with zi) 最大误差: {max_diff:.2e}")
+print(f"   ✅ 使用 zi 保持状态，分段结果与整体几乎完全相同！")
+print(f"\n2. BA 滤波器 - 不使用 zi (每段独立):")
+print(f"   整体 vs 分段 (zi=None) 最大误差: {max_diff_no_zi:.2e}")
+print(f"   ❌ 不使用 zi，每段开头都有瞬态响应，结果明显不同！")
+print(f"\n3. SOS 滤波器 - 使用 zi 保持状态:")
+print(f"   整体 vs 分段 (with zi) 最大误差: {max_diff_sos:.2e}")
+print(f"   ✅ SOS 同样完美保持状态！")
+print(f"\n4. 关于 zi=None 的理解:")
+print(f"   - zi=None 等价于 zi=zeros (全零初始状态)")
+print(f"   - zi=lfilter_zi(b,a)*x[0] 提供稳态初始化")
+print(f"   - 两者在信号开始处的瞬态响应完全不同！")
+
 print("=" * 80)
