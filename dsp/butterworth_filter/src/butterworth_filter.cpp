@@ -63,28 +63,43 @@ static std::vector<double> solve_linear(const std::vector<double>& A,
 
 } // namespace
 
-// ---------------- ctor ----------------
-
-ButterworthFilter::ButterworthFilter(const std::vector<double>& b,
-                                     const std::vector<double>& a,
-                                     bool cache_zi)
-: precompute_(cache_zi) {
-    k_.b = b;
-    k_.a = a;
-    normalize_ba(k_.b, k_.a);
-    k_.ntaps = (int)std::max(k_.b.size(), k_.a.size());
-
-    if (precompute_) {
-        k_.zi = lfilter_zi(k_.b, k_.a);
-    }
-}
-
 // ---------------- factory methods ----------------
 
 ButterworthFilter ButterworthFilter::from_ba(const std::vector<double>& b,
                                              const std::vector<double>& a,
                                              bool cache_zi) {
-    return ButterworthFilter(b, a, cache_zi);
+    ButterworthFilter filter;
+    filter.mode_ = Mode::BA;
+    filter.precompute_ = cache_zi;
+    
+    filter.ba_kernel_.b = b;
+    filter.ba_kernel_.a = a;
+    normalize_ba(filter.ba_kernel_.b, filter.ba_kernel_.a);
+    filter.ba_kernel_.ntaps = (int)std::max(filter.ba_kernel_.b.size(), filter.ba_kernel_.a.size());
+    
+    if (cache_zi) {
+        filter.ba_kernel_.zi = lfilter_zi(filter.ba_kernel_.b, filter.ba_kernel_.a);
+    }
+    
+    return filter;
+}
+
+ButterworthFilter ButterworthFilter::from_sos(const std::vector<SOSSection>& sos,
+                                              bool cache_zi) {
+    ButterworthFilter filter;
+    filter.mode_ = Mode::SOS;
+    filter.precompute_ = cache_zi;
+    
+    filter.sos_kernel_.sos = sos;
+    normalize_sos(filter.sos_kernel_.sos);
+    filter.sos_kernel_.n_sections = (int)filter.sos_kernel_.sos.size();
+    filter.sos_kernel_.ntaps = sos_ntaps(filter.sos_kernel_.sos);
+    
+    if (cache_zi) {
+        filter.sos_kernel_.zi = sosfilt_zi(filter.sos_kernel_.sos);
+    }
+    
+    return filter;
 }
 
 ButterworthFilter ButterworthFilter::from_params(int order,
@@ -93,38 +108,38 @@ ButterworthFilter ButterworthFilter::from_params(int order,
                                                  const std::vector<double>& cutoff,
                                                  bool cache_zi) {
     auto [b, a] = butter_ba(order, fs, btype, cutoff);
-    return ButterworthFilter(b, a, cache_zi);
+    return from_ba(b, a, cache_zi);
 }
 
-// ---------------- public APIs (vector) ----------------
+// ---------------- public APIs ----------------
 
 std::vector<double> ButterworthFilter::filtfilt(const std::vector<double>& x,
                                                 PadType padtype,
                                                 int padlen) const {
-    return filtfilt(k_, x.data(), x.size(), padtype, padlen);
+    return filtfilt(x.data(), x.size(), padtype, padlen);
+}
+
+std::vector<double> ButterworthFilter::filtfilt(const double* x, size_t n,
+                                                PadType padtype, int padlen) const {
+    if (mode_ == Mode::SOS) return filtfilt_impl(sos_kernel_, x, n, padtype, padlen);
+    return filtfilt_impl(ba_kernel_, x, n, padtype, padlen);
 }
 
 std::pair<std::vector<double>, std::vector<double>>
 ButterworthFilter::lfilter(const std::vector<double>& x,
                            const std::vector<double>* zi) const {
-    return lfilter(k_, x.data(), x.size(), zi);
-}
-
-std::vector<double> ButterworthFilter::detrend(const std::vector<double>& x) const {
-    return detrend(x.data(), x.size());
-}
-
-// ---------------- public APIs (ptr) ----------------
-
-std::vector<double> ButterworthFilter::filtfilt(const double* x, size_t n,
-                                                PadType padtype, int padlen) const {
-    return filtfilt(k_, x, n, padtype, padlen);
+    return lfilter(x.data(), x.size(), zi);
 }
 
 std::pair<std::vector<double>, std::vector<double>>
 ButterworthFilter::lfilter(const double* x, size_t n,
                            const std::vector<double>* zi) const {
-    return lfilter(k_, x, n, zi);
+    if (mode_ == Mode::SOS) return lfilter_impl(sos_kernel_, x, n, zi);
+    return lfilter_impl(ba_kernel_, x, n, zi);
+}
+
+std::vector<double> ButterworthFilter::detrend(const std::vector<double>& x) const {
+    return detrend(x.data(), x.size());
 }
 
 std::vector<double> ButterworthFilter::detrend(const double* x, size_t n) const {
@@ -151,40 +166,6 @@ std::vector<double> ButterworthFilter::detrend(const double* x, size_t n) const 
     return y;
 }
 
-std::vector<double> ButterworthFilter::lfilterZi() const {
-    return k_.zi;
-}
-
-// ---------------- static precompute ----------------
-
-ButterworthFilter::Kernel
-ButterworthFilter::precompute(const std::vector<double>& b,
-                              const std::vector<double>& a) {
-    Kernel k;
-    k.b = b;
-    k.a = a;
-    normalize_ba(k.b, k.a);
-    k.ntaps = (int)std::max(k.b.size(), k.a.size());
-    k.zi = lfilter_zi(k.b, k.a);
-    return k;
-}
-
-// ---------------- kernel wrappers ----------------
-
-std::vector<double>
-ButterworthFilter::filtfilt(const Kernel& k,
-                            const std::vector<double>& x,
-                            PadType padtype, int padlen) {
-    return filtfilt(k, x.data(), x.size(), padtype, padlen);
-}
-
-std::pair<std::vector<double>, std::vector<double>>
-ButterworthFilter::lfilter(const Kernel& k,
-                           const std::vector<double>& x,
-                           const std::vector<double>* zi) {
-    return lfilter(k, x.data(), x.size(), zi);
-}
-
 // ---------------- core helpers ----------------
 
 void ButterworthFilter::normalize_ba(std::vector<double>& b, std::vector<double>& a) {
@@ -198,6 +179,73 @@ void ButterworthFilter::normalize_ba(std::vector<double>& b, std::vector<double>
     for (double& v : a) v *= inv;
 }
 
+// ---------------- SOS helpers ----------------
+
+void ButterworthFilter::normalize_sos(std::vector<SOSSection>& sos) {
+    for (auto& s : sos) {
+        const double a0 = s[3];
+        if (a0 == 0.0) throw std::invalid_argument("normalize_sos: a0 must be nonzero");
+        if (a0 == 1.0) {
+            // still ensure canonical a0==1 exactly
+            s[3] = 1.0;
+            continue;
+        }
+        const double inv = 1.0 / a0;
+        s[0] *= inv; s[1] *= inv; s[2] *= inv;
+        s[4] *= inv; s[5] *= inv;
+        s[3] = 1.0;
+    }
+}
+
+int ButterworthFilter::sos_ntaps(const std::vector<SOSSection>& sos) {
+    // Match SciPy sosfiltfilt's heuristic ntaps computation.
+    // For an SOS cascade, the equivalent TF order is 2*n_sections.
+    // SciPy computes:
+    //   ntaps = 2*n_sections + 1 - min(n_zeros_at_end(b), n_zeros_at_end(a))
+    // where b/a are per-section and trailing zeros are counted across sections.
+    const int nsec = (int)sos.size();
+    if (nsec == 0) return 0;
+
+    int tz_b = 0;
+    int tz_a = 0;
+    for (int i = 0; i < nsec; ++i) {
+        const auto& s = sos[i];
+        if (s[2] == 0.0) ++tz_b;
+        if (s[5] == 0.0) ++tz_a;
+    }
+    const int tz = std::min(tz_b, tz_a);
+    return 2 * nsec + 1 - tz;
+}
+
+std::vector<double> ButterworthFilter::sosfilt_zi(const std::vector<SOSSection>& sos) {
+    const int nsec = (int)sos.size();
+    std::vector<double> zi((size_t)2 * (size_t)nsec, 0.0);
+    if (nsec == 0) return zi;
+
+    // Compute per-section DF2T zi for step response, scaled by cumulative DC gain.
+    double cum_gain = 1.0;
+    for (int i = 0; i < nsec; ++i) {
+        const auto& s = sos[i];
+        const double b0 = s[0], b1 = s[1], b2 = s[2];
+        const double a1 = s[4], a2 = s[5];
+
+        const double sum_b = b0 + b1 + b2;
+        const double sum_a = 1.0 + a1 + a2;
+        const double g = (sum_a != 0.0) ? (sum_b / sum_a) : 0.0;
+
+        // DF2T steady-state states for unit-step input to *this section*.
+        const double y_ss = g;
+        const double z1 = (y_ss - b0);
+        const double z2 = (b2 - a2 * y_ss);
+
+        zi[(size_t)2 * (size_t)i + 0] = z1 * cum_gain;
+        zi[(size_t)2 * (size_t)i + 1] = z2 * cum_gain;
+
+        cum_gain *= g;
+    }
+    return zi;
+}
+
 int ButterworthFilter::compute_edge(int x_len, int ntaps, PadType padtype, int padlen) {
     // SciPy default: padlen(None) => edge = 3 * ntaps
     int edge = (padlen < 0) ? (3 * ntaps) : padlen;
@@ -208,11 +256,6 @@ int ButterworthFilter::compute_edge(int x_len, int ntaps, PadType padtype, int p
     // SciPy requires len(x) > edge
     if (x_len <= edge) throw std::invalid_argument("x.size() must be > padlen/edge");
     return edge;
-}
-
-std::vector<double>
-ButterworthFilter::pad_extend_1d(const std::vector<double>& x, int edge, PadType padtype) {
-    return pad_extend_1d_ptr(x.data(), x.size(), edge, padtype);
 }
 
 std::vector<double>
@@ -248,7 +291,10 @@ ButterworthFilter::pad_extend_1d_ptr(const double* x, size_t n, int edge, PadTyp
 }
 
 std::vector<double>
-ButterworthFilter::lfilter_zi(std::vector<double> b, std::vector<double> a) {
+ButterworthFilter::lfilter_zi(const std::vector<double>& b_in,
+                              const std::vector<double>& a_in) {
+    std::vector<double> b = b_in;
+    std::vector<double> a = a_in;
     normalize_ba(b, a);
 
     const int n = (int)std::max(b.size(), a.size()) - 1;
@@ -309,17 +355,63 @@ ButterworthFilter::lfilter_df2t(std::vector<double> b, std::vector<double> a,
     return {y, z};
 }
 
-// ---------------- kernel ptr core ----------------
+std::pair<std::vector<double>, std::vector<double>>
+ButterworthFilter::sosfilt_df2t(const std::vector<SOSSection>& sos,
+                                const double* x, size_t n,
+                                const std::vector<double>* zi) {
+    const int nsec = (int)sos.size();
+    if (nsec == 0) {
+        return {std::vector<double>(x, x + n), {}};
+    }
+
+    std::vector<double> z((size_t)2 * (size_t)nsec, 0.0);
+    if (zi) {
+        if (zi->size() != z.size()) throw std::invalid_argument("sosfilt: zi size mismatch");
+        z = *zi;
+    }
+
+    std::vector<double> y(n, 0.0);
+    for (size_t k = 0; k < n; ++k) {
+        double xi = x[k];
+        for (int si = 0; si < nsec; ++si) {
+            const auto& s = sos[si];
+            const double b0 = s[0], b1 = s[1], b2 = s[2];
+            // a0 is normalized to 1
+            const double a1 = s[4], a2 = s[5];
+
+            const size_t o = (size_t)2 * (size_t)si;
+            const double z1 = z[o + 0];
+            const double z2 = z[o + 1];
+
+            const double yi = b0 * xi + z1;
+            const double new_z1 = b1 * xi - a1 * yi + z2;
+            const double new_z2 = b2 * xi - a2 * yi;
+            z[o + 0] = new_z1;
+            z[o + 1] = new_z2;
+            xi = yi;
+        }
+        y[k] = xi;
+    }
+    return {y, z};
+}
+
+// ---------------- 核心滤波实现 ----------------
 
 std::pair<std::vector<double>, std::vector<double>>
-ButterworthFilter::lfilter(const Kernel& k, const double* x, size_t n,
-                           const std::vector<double>* zi) {
+ButterworthFilter::lfilter_impl(const BAKernel& k, const double* x, size_t n,
+                               const std::vector<double>* zi) {
     return lfilter_df2t(k.b, k.a, x, n, zi);
 }
 
+std::pair<std::vector<double>, std::vector<double>>
+ButterworthFilter::lfilter_impl(const SOSKernel& k, const double* x, size_t n,
+                               const std::vector<double>* zi) {
+    return sosfilt_df2t(k.sos, x, n, zi);
+}
+
 std::vector<double>
-ButterworthFilter::filtfilt(const Kernel& k, const double* x, size_t n,
-                            PadType padtype, int padlen) {
+ButterworthFilter::filtfilt_impl(const BAKernel& k, const double* x, size_t n,
+                                PadType padtype, int padlen) {
     if (k.b.empty() || k.a.empty()) throw std::invalid_argument("filtfilt: b/a empty");
     if (n == 0) return {};
 
@@ -358,6 +450,54 @@ ButterworthFilter::filtfilt(const Kernel& k, const double* x, size_t n,
     }
 
     auto y2_pair = lfilter_df2t(k.b, k.a, y.data(), y.size(), pzi_b);
+    std::vector<double> y2 = std::move(y2_pair.first);
+    std::reverse(y2.begin(), y2.end());
+
+    if (edge == 0) return y2;
+    return std::vector<double>(y2.begin() + edge, y2.end() - edge);
+}
+
+std::vector<double>
+ButterworthFilter::filtfilt_impl(const SOSKernel& k, const double* x, size_t n,
+                                PadType padtype, int padlen) {
+    if (k.sos.empty()) throw std::invalid_argument("filtfilt: sos empty");
+    if (n == 0) return {};
+
+    const int edge = compute_edge((int)n, k.ntaps, padtype, padlen);
+    const std::vector<double> ext = (edge > 0)
+        ? pad_extend_1d_ptr(x, n, edge, padtype)
+        : std::vector<double>(x, x + n);
+
+    // zi base: use cached if present, else compute
+    std::vector<double> zi_base = k.zi;
+    if (zi_base.empty()) zi_base = sosfilt_zi(k.sos);
+
+    // forward with zi*x0
+    std::vector<double> zi_f;
+    const std::vector<double>* pzi_f = nullptr;
+    if (!zi_base.empty()) {
+        zi_f.resize(zi_base.size());
+        const double x0 = ext.front();
+        for (size_t i = 0; i < zi_base.size(); ++i) zi_f[i] = zi_base[i] * x0;
+        pzi_f = &zi_f;
+    }
+
+    auto y_pair = sosfilt_df2t(k.sos, ext.data(), ext.size(), pzi_f);
+    std::vector<double> y = std::move(y_pair.first);
+
+    // backward with zi*y0
+    const double y0 = y.back();
+    std::reverse(y.begin(), y.end());
+
+    std::vector<double> zi_b;
+    const std::vector<double>* pzi_b = nullptr;
+    if (!zi_base.empty()) {
+        zi_b.resize(zi_base.size());
+        for (size_t i = 0; i < zi_base.size(); ++i) zi_b[i] = zi_base[i] * y0;
+        pzi_b = &zi_b;
+    }
+
+    auto y2_pair = sosfilt_df2t(k.sos, y.data(), y.size(), pzi_b);
     std::vector<double> y2 = std::move(y2_pair.first);
     std::reverse(y2.begin(), y2.end());
 
