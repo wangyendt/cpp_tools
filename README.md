@@ -1,6 +1,6 @@
 # cpp_tools
 
-高性能 C++ 工具库，通过 pybind11 提供 Python 接口，支持通过 `gettool.py` 自动下载和编译。
+面向 Python 与 C++ 复用的 C++ 工具集合。工具既可以被 sparse checkout 后作为 C++ 源码引用，也可以通过 pybind11 编译成 Python 扩展模块，并由 Python 包装类在首次导入失败时自动调用 `gettool` 拉取、编译和安装到本地 `lib/`。
 
 ---
 
@@ -10,6 +10,7 @@
 - [与 gettool.py 的关系](#-与-gettoolpy-的关系)
 - [现有工具](#-现有工具)
 - [快速开始](#-快速开始)
+- [当前工程边界](#-当前工程边界)
 - [新增工具完整指南](#-新增工具完整指南)
 - [AI 提示词模板](#-ai-提示词模板)
 - [目录结构规范](#-目录结构规范)
@@ -19,14 +20,15 @@
 
 ## 🎯 简介
 
-`cpp_tools` 是一个高性能 C++ 工具库集合，特点：
+`cpp_tools` 的核心目标是把重计算或强依赖系统能力的模块沉淀成一套可复用工具：
 
-- ✅ **独立版本控制** - 每个工具通过 Git tags 独立管理版本
-- ✅ **Python 绑定** - 通过 pybind11 提供 Python 接口
-- ✅ **自动化分发** - 通过 `gettool.py` 自动下载、编译、安装
-- ✅ **高性能** - C++ 实现，性能优于纯 Python（例如 Butterworth Filter 比 SciPy 快 1.25x）
-- ✅ **跨平台** - 支持 macOS、Linux、Windows
-- ✅ **自包含配置** - 每个工具都是完全独立的，无需外部依赖
+- **C++ 源码复用**：通过 `gettool <tool>` 或 sparse checkout 获取指定工具源码，需要时直接 include。
+- **Python 扩展复用**：每个可构建工具提供 pybind11 模块，编译产物输出到工具目录的 `lib/`。
+- **Python 包装类按需安装**：`pywayne` 侧包装类优先 import 本地 `lib/`，失败后自动执行 `gettool <tool> -b -t <lib_path>`。
+- **macOS/Linux 优先**：现有 CI 覆盖 macOS 和 Ubuntu。Windows 不是当前一等支持目标，不能按“开箱即用”承诺。
+- **自包含 CMake 配置**：每个工具的 `CMakeLists.txt` 内联 Python 检测和优化配置，但 OpenCV、Eigen、Boost、Ceres、Pangolin 等系统依赖仍需被安装或由安装脚本处理。
+
+当前真正的用户路径是：Python 用户 import 包装类，包装类自动调用 `gettool` 获取 `.so/.dylib`；C++ 用户调用 `gettool <tool> -c` 获取精简源码，或直接 sparse checkout 工具目录。
 
 ---
 
@@ -49,29 +51,35 @@
 └────────┬────────┘
          │
          │ 1. sparse checkout 指定工具
-         │ 2. 运行 cmake && make
-         │ 3. 复制到目标目录
+         │ 2. 可选运行 cmake && make
+         │ 3. 复制源码或 lib/ 到目标目录
          │
          ▼
 ┌─────────────────┐
-│  bin/dsp/       │  最终安装位置
-│  butterworth_   │  import butterworth_filter
-│  filter/        │
+│  pywayne/*/lib  │  Python 包装类的本地扩展目录
+│  或用户指定路径 │  import butterworth_filter
 └─────────────────┘
 ```
 
 ### 配置文件：name_to_path_map.yaml
 
-`gettool.py` 通过 `name_to_path_map.yaml` 找到工具的路径：
+`gettool.py` 通过 `name_to_path_map.yaml` 找到工具路径、判断是否可构建、以及定位依赖安装脚本。当前配置是对象格式，不是简单的 `name: path`：
 
 ```yaml
 # cpp_tools/name_to_path_map.yaml
-butterworth_filter: dsp/butterworth_filter
-sliding_window_dsp: dsp/sliding_window
-apriltag_detection: cv/apriltag_detection
-camera_models: cv/camera_models
-pangolin_viewer: visualization/pangolin_viewer
-adb_logcat_reader: adb
+butterworth_filter:
+  path: dsp/butterworth_filter
+  buildable: true
+  installable: false
+
+opencv:
+  path: third_party/opencv
+  buildable: false
+  installable: true
+  installation:
+    install_script: install_scripts/install_opencv.sh
+    extra_dependencies:
+      - opencv_contrib
 ```
 
 ### 使用方法
@@ -81,8 +89,22 @@ adb_logcat_reader: adb
 python gettool.py -l                        # 列出所有可用工具
 python gettool.py butterworth_filter        # 下载源码
 python gettool.py butterworth_filter -b     # 下载并编译
-python gettool.py butterworth_filter -c     # 仅编译（已下载的）
+python gettool.py butterworth_filter -c     # 仅复制 src/include，供 C++ include 使用
+python gettool.py apriltag_detection -b -t /path/to/lib
 ```
+
+### Python 包装类中的自动安装模式
+
+`wayne_algorithm_lib` 中的包装类已经使用了统一思路：
+
+```python
+from pywayne.cpp_loader import import_cpp_module
+
+lib_path = os.path.join(os.path.dirname(__file__), "lib")
+module = import_cpp_module("apriltag_detection", "apriltag_detection", lib_path)
+```
+
+这条链路的关键前提是：`gettool` 在 `PATH` 中可执行，CMake 能找到当前 Python 环境、pybind11 和工具依赖，编译后的模块名与 `PYBIND11_MODULE(...)` 完全一致。公共 helper 会保留 import 原始错误，避免把“动态库加载失败”误判成“模块不存在”。
 
 ---
 
@@ -104,10 +126,10 @@ python gettool.py butterworth_filter -c     # 仅编译（已下载的）
 ### 安装依赖
 
 ```bash
-# macOS
+# macOS，按工具需要追加 boost/ceres/glew 等依赖
 brew install cmake pybind11 eigen opencv
 
-# Ubuntu
+# Ubuntu，按工具需要追加 libboost-all-dev/libceres-dev/libglew-dev 等依赖
 sudo apt install cmake pybind11-dev libeigen3-dev libopencv-dev
 
 # 或使用提供的安装脚本
@@ -128,19 +150,45 @@ cd cpp_tools/dsp/butterworth_filter/
 python example.py  # 自动编译并运行
 ```
 
-### 在 Python 中使用
+### 在 Python 中直接使用 pybind 模块
 
 ```python
 import sys
+import numpy as np
 sys.path.append('lib')
 import butterworth_filter as bf
 
 # 创建滤波器
-filter = bf.ButterworthFilter(order=4, cutoff=0.1)
+filter = bf.ButterworthFilter.from_params(order=4, fs=1.0, btype="lowpass", cutoff=[0.1])
 
 # 滤波
-filtered = filter.filtfilt(signal)
+x = np.ascontiguousarray(signal, dtype=np.float64)
+filtered = filter.filtfilt(x)
 ```
+
+### 在 pywayne 中使用包装类
+
+包装类负责自动检测并补齐本地扩展库。例如：
+
+```python
+from pywayne.cv.apriltag_detector import ApriltagCornerDetector
+
+detector = ApriltagCornerDetector()
+detections = detector.detect("test.png")
+```
+
+---
+
+## 🚧 当前工程边界
+
+这套流程已经具备雏形，但要做到任意 macOS/Linux 设备上真正开箱即用，还需要补齐下面几块：
+
+- **统一工具元数据**：`name_to_path_map.yaml` 已开始记录 `python_module`、`bundle_runtime_dependencies` 和部分 OpenCV 组件，但还需要补齐产物文件模式、系统依赖、Python 依赖、C++ clean copy、headless 能力等 schema。
+- **统一 Python 安装助手**：`pywayne` 侧已有公共 `import_cpp_module()`，`apriltag_detector`、`camera_model`、`pangolin_utils`、`logcat_reader` 已迁移；后续新包装类应复用这一入口。
+- **gettool 可恢复构建**：当前已能使用当前 Python、`cmake --build`、运行时依赖打包和 import 验证；还需要增加依赖预检、构建缓存和更明确的系统包建议。
+- **依赖自动安装策略**：简单工具只需 pybind11；CV/可视化工具依赖 OpenCV、Eigen、Boost、Ceres、Pangolin、OpenGL/GLEW。应优先使用系统包管理器或已有环境，源码安装脚本作为明确选择，而不是默认长时间编译。
+- **CI 覆盖与发布产物**：CI 已覆盖 macOS/Ubuntu，但工具列表缺少 `dsp/butterworth_filter`，也没有把构建矩阵直接回写为可供 `gettool` 使用的二进制索引。
+- **C++ include 模式**：`gettool -c` 能复制源码，但还没有稳定的 include manifest，调用方仍需要知道头文件路径、源文件和依赖链接方式。
 
 ---
 
@@ -322,6 +370,7 @@ your_tool_name 使用示例
 
 import os
 import sys
+import subprocess
 import numpy as np
 import time
 
@@ -334,11 +383,8 @@ def build():
     os.makedirs(build_dir, exist_ok=True)
     
     print("🔨 编译 C++ 模块...")
-    ret = os.system(f"cd {build_dir} && cmake .. && make -j$(nproc)")
-    
-    if ret != 0:
-        print("❌ 编译失败")
-        sys.exit(1)
+    subprocess.run(["cmake", ".."], cwd=build_dir, check=True)
+    subprocess.run(["cmake", "--build", ".", "-j", str(os.cpu_count() or 1)], cwd=build_dir, check=True)
     
     print("✅ 编译成功\n")
 
@@ -386,15 +432,13 @@ print("\n✅ 测试通过")
 
 ```yaml
 # 添加你的工具
-your_tool_name: category/your_tool_name
+your_tool_name:
+  path: category/your_tool_name
+  buildable: true
+  installable: false
 ```
 
-然后运行：
-
-```bash
-cd cpp_tools/
-python generate_name_to_path_map.py  # 如果有自动生成脚本
-```
+不要直接运行当前版本的 `generate_name_to_path_map.py` 来更新正式配置；它会按旧的简单 `name: path` 结构重写文件，不保留 `buildable/installable/installation` 元数据。新增工具时应手动补齐元数据，或先升级生成脚本。
 
 ### 测试流程
 
@@ -465,14 +509,14 @@ python gettool.py your_tool_name -b
 
 5. **example.py**（必须包含以下部分）：
 
-   - 自动编译逻辑：def build() + os.system()
+   - 自动编译逻辑：`def build()` + `subprocess.run(["cmake", ...])`
    - 导入模块：sys.path.append('lib') + import
    - 功能测试
    - 性能对比（与 Python/NumPy/SciPy 等价实现对比）
    - 输出结果
 
 6. **注册工具**：
-   - 在 name_to_path_map.yaml 中添加：<your_tool_name>: <category>/<your_tool_name>
+   - 在 `name_to_path_map.yaml` 中添加 `path/buildable/installable` 对象配置
 
 **参考示例：**
 请参考 `dsp/butterworth_filter/` 的完整实现，它是一个标准的工具示例。
@@ -568,7 +612,6 @@ cpp_tools/
 ├── cmake/                              # CMake 工具和模板
 │   ├── CMakeLists_standalone.txt      # 新项目模板（必须使用）
 │   ├── cmake_manager.py               # 自动化管理工具
-│   ├── QUICKSTART.md                  # 快速开始指南
 │   └── README.md                      # CMake 详细文档
 │
 ├── dsp/                               # 信号处理工具
@@ -605,7 +648,7 @@ cpp_tools/
 │   └── ...
 │
 ├── name_to_path_map.yaml            # gettool.py 配置（必须更新）
-├── generate_name_to_path_map.py     # 自动生成工具
+├── generate_name_to_path_map.py     # 旧版生成脚本，升级前不要覆盖正式 YAML
 ├── README.md                        # 本文件
 └── LICENSE
 ```
@@ -628,7 +671,8 @@ cpp_tools/
    ```python
    ✅ 包含自动编译逻辑
    def build():
-       os.system("mkdir -p build && cd build && cmake .. && make")
+       subprocess.run(["cmake", ".."], cwd=build_dir, check=True)
+       subprocess.run(["cmake", "--build", "."], cwd=build_dir, check=True)
    
    ❌ 手动运行 cmake
    ```
@@ -643,7 +687,10 @@ cpp_tools/
 
 5. **name_to_path_map.yaml** ✅
    ```yaml
-   ✅ your_tool_name: category/your_tool_name
+   ✅ your_tool_name:
+        path: category/your_tool_name
+        buildable: true
+        installable: false
    ❌ 忘记添加
    ```
 
@@ -703,8 +750,11 @@ Tool 'your_tool' not found
 # 检查 name_to_path_map.yaml
 cat name_to_path_map.yaml | grep your_tool
 
-# 如果没有，添加：
-echo "your_tool_name: category/your_tool_name" >> name_to_path_map.yaml
+# 如果没有，按对象格式添加：
+# your_tool_name:
+#   path: category/your_tool_name
+#   buildable: true
+#   installable: false
 
 # 提交到 GitHub
 git add name_to_path_map.yaml
@@ -747,8 +797,9 @@ python cmake/cmake_manager.py check
 ## 📚 相关文档
 
 - [cmake/README.md](cmake/README.md) - CMake 详细配置文档
-- [cmake/QUICKSTART.md](cmake/QUICKSTART.md) - 5 分钟快速开始
 - [install_scripts/SCRIPT_GUIDELINES.md](install_scripts/SCRIPT_GUIDELINES.md) - 依赖安装指南
+- [docs/roadmap/](docs/roadmap/) - 开箱即用构建与分发路线图
+- [docs/plan/](docs/plan/) - 近期可执行改造计划
 
 ---
 

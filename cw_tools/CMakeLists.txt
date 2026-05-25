@@ -19,7 +19,7 @@ endif()
 
 list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt")
 
-find_package(OpenCV 4 REQUIRED)
+find_package(OpenCV 4 REQUIRED COMPONENTS core)
 find_package(Eigen3 3 REQUIRED)
 
 

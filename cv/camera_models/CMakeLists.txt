@@ -91,7 +91,7 @@ else()
 endif()
 message(STATUS "Optimization flags: ${OPTIMIZATION_FLAGS}")
 
-find_package(OpenCV 4 REQUIRED)
+find_package(OpenCV 4 REQUIRED COMPONENTS core imgproc calib3d)
 find_package(Eigen3 3 REQUIRED NO_MODULE) # Use NO_MODULE for modern Eigen3 CMake config
 find_package(pybind11 REQUIRED)
 # Boost is needed for shared_ptr used in the library headers
@@ -154,6 +154,20 @@ endif()
 set_target_properties(camera_models PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${PYTHON_MODULE_OUTPUT_DIR}
 )
+
+if(APPLE)
+    set_target_properties(camera_models PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        BUILD_RPATH "@loader_path"
+        INSTALL_RPATH "@loader_path"
+    )
+elseif(UNIX)
+    set_target_properties(camera_models PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        BUILD_RPATH "$ORIGIN"
+        INSTALL_RPATH "$ORIGIN"
+    )
+endif()
 
 message(STATUS "OpenCV libraries: ${OpenCV_LIBS}")
 message(STATUS "Eigen3 include dir: ${EIGEN3_INCLUDE_DIR}")

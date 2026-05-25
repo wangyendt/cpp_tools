@@ -5,7 +5,7 @@ add_definitions(-fPIC -O3)
 
 # find_package(catkin REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(OpenCV REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc calib3d)
 
 # catkin_package(
 #   INCLUDE_DIRS include ${EIGEN3_INCLUDE_DIRS}
@@ -16,7 +16,7 @@ include_directories(include ${EIGEN3_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
 
 #library
 file(GLOB SOURCE_FILES "src/*.cc")
-add_library(${PROJECT_NAME}  ${SOURCE_FILES})
+add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
 target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS})
 # target_link_libraries(${PROJECT_NAME} ${OpenCV_LIBS} ${catkin_LIBRARIES})
 

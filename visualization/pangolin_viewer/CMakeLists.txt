@@ -96,7 +96,7 @@ endif()
 message(STATUS "Optimization flags: ${OPTIMIZATION_FLAGS}")
 
 find_package(pybind11 REQUIRED)
-find_package(OpenCV 4 REQUIRED)
+find_package(OpenCV 4 REQUIRED COMPONENTS core imgproc imgcodecs)
 find_package(Eigen3 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
@@ -206,3 +206,17 @@ set_target_properties(
     pangolin_viewer 
     PROPERTIES LIBRARY_OUTPUT_DIRECTORY
     ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+
+if(APPLE)
+    set_target_properties(pangolin_viewer PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        BUILD_RPATH "@loader_path"
+        INSTALL_RPATH "@loader_path"
+    )
+elseif(UNIX)
+    set_target_properties(pangolin_viewer PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        BUILD_RPATH "$ORIGIN"
+        INSTALL_RPATH "$ORIGIN"
+    )
+endif()

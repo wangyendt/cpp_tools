@@ -1,0 +1,29 @@
+# ====================================================================
+# CMake 与工具检查
+# 作用：检查 cpp_tools 中 pybind11 工具是否仍使用自包含 CMake 配置
+# ====================================================================
+python cmake/cmake_manager.py check
+
+# ====================================================================
+# gettool 基础验证
+# 作用：从 wayne_algorithm_lib/bin 调用 gettool，下载并编译一个低依赖工具
+# ====================================================================
+python gettool.py butterworth_filter -b -t /tmp/cpp_tools_test_lib
+
+# ====================================================================
+# 代理检查
+# 作用：确认 git/curl 使用的 7890 代理是否在真实本机环境可连
+# ====================================================================
+git config --global --get http.proxy
+git config --global --get https.proxy
+nc -vz 127.0.0.1 7890
+curl -I --proxy http://127.0.0.1:7890 https://github.com --connect-timeout 5
+
+# ====================================================================
+# AprilTag 本地构建验证
+# 作用：指定当前 Python、pybind11 和 OpenCV_DIR，检查 OpenCV 链接组件是否收敛
+# ====================================================================
+cmake -S cv/apriltag_detection -B /tmp/cpp_tools_apriltag_build -DPYTHON_EXECUTABLE=$(which python3) -Dpybind11_DIR=$(python3 -m pybind11 --cmakedir) -DOpenCV_DIR=/usr/local/lib/cmake/opencv4
+cmake --build /tmp/cpp_tools_apriltag_build --parallel 8
+otool -L cv/apriltag_detection/lib/apriltag_detection*.so   # macOS
+ldd cv/apriltag_detection/lib/apriltag_detection*.so        # Ubuntu/Linux

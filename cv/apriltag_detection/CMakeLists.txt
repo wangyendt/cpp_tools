@@ -90,7 +90,7 @@ else()
 endif()
 message(STATUS "Optimization flags: ${OPTIMIZATION_FLAGS}")
 
-find_package(OpenCV 4 REQUIRED)
+find_package(OpenCV 4 REQUIRED COMPONENTS core imgproc calib3d)
 find_package(Eigen3 REQUIRED)
 find_package(pybind11 REQUIRED)
 include_directories(
@@ -126,3 +126,17 @@ endif()
 set_target_properties(apriltag_detection PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/lib
 )
+
+if(APPLE)
+    set_target_properties(apriltag_detection PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        BUILD_RPATH "@loader_path"
+        INSTALL_RPATH "@loader_path"
+    )
+elseif(UNIX)
+    set_target_properties(apriltag_detection PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        BUILD_RPATH "$ORIGIN"
+        INSTALL_RPATH "$ORIGIN"
+    )
+endif()

@@ -10,26 +10,50 @@ pangolin_viewer:
   path: visualization/pangolin_viewer
   buildable: true
   installable: false
+  python_module: pangolin_viewer
+  bundle_runtime_dependencies: true
+  opencv_components:
+    - core
+    - imgproc
+    - imgcodecs
 sliding_window_dsp:
   path: dsp/sliding_window
   buildable: true
   installable: false
+  python_module: sliding_window_dsp
+  bundle_runtime_dependencies: true
 butterworth_filter:
   path: dsp/butterworth_filter
   buildable: true
   installable: false
+  python_module: butterworth_filter
+  bundle_runtime_dependencies: true
 adb_logcat_reader:
   path: adb
   buildable: true
   installable: false
+  python_module: adb_logcat_reader
+  bundle_runtime_dependencies: true
 apriltag_detection:
   path: cv/apriltag_detection
   buildable: true
   installable: false
+  python_module: apriltag_detection
+  bundle_runtime_dependencies: true
+  opencv_components:
+    - core
+    - imgproc
+    - calib3d
 camera_models:
   path: cv/camera_models
   buildable: true
   installable: false
+  python_module: camera_models
+  bundle_runtime_dependencies: true
+  opencv_components:
+    - core
+    - imgproc
+    - calib3d
 eigen:
   path: third_party/eigen
   buildable: false
@@ -104,4 +128,3 @@ cmake:
   installable: true
   installation:
     install_script: install_scripts/install_cmake.sh
-
